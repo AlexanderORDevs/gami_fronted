@@ -17,16 +17,6 @@ Every security-changing action asks for a business reason before calling the bac
 
 Store assignment currently requires a known store UUID. Replacing this field with a searchable store selector depends on the upcoming Stores API exposing a store-list endpoint. This dependency does not block the remaining user administration workflows.
 
-## Local development
-
-The API must be available at `http://localhost:4000/api`. Copy `.env.example` to `.env.local` only when a different local API URL is required.
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
 ## Authentication boundary
 
 The backend currently returns access and refresh tokens in the response body. During local development, this client retains them in `sessionStorage`, limiting persistence to the active browser tab. Access tokens are validated during restoration and renewed one minute before expiration. Refresh rotation is coordinated so only one request can consume a refresh token at a time.
