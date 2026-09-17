@@ -58,23 +58,73 @@ const EMPTY_USER: CreateUserInput = {
 };
 
 function formatDate(value: string | null) {
-  if (!value) return "Never";
-  return new Intl.DateTimeFormat("en", {
+  if (!value) return "Nunca";
+  return new Intl.DateTimeFormat("es-PE", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "America/Lima",
   }).format(new Date(value));
 }
 
 function messageFrom(error_: unknown) {
   return error_ instanceof Error
     ? error_.message
-    : "The operation could not be completed.";
+    : "No se pudo completar la operación.";
 }
+
+const STATUS_LABELS: Record<UserStatus, string> = {
+  ACTIVE: "Activo",
+  SUSPENDED: "Suspendido",
+  DISABLED: "Deshabilitado",
+};
+const ACTION_LABELS: Record<Action["kind"], string> = {
+  status: "Cambiar estado",
+  "grant-role": "Asignar rol",
+  "revoke-role": "Retirar rol",
+  "grant-store": "Asignar tienda",
+  "revoke-store": "Retirar acceso a tienda",
+  "reset-password": "Restablecer contraseña",
+  "revoke-sessions": "Cerrar todas las sesiones",
+};
+const ROLE_LABELS: Record<string, string> = {
+  CATALOG_MANAGER: "Responsable de catálogo",
+  OPERATIONS_MANAGER: "Responsable de operaciones",
+  WAREHOUSE_OPERATOR: "Operador de almacén",
+  FINANCE_MANAGER: "Responsable de finanzas",
+  STORE_OPERATOR: "Operador de tienda",
+  SUPER_ADMIN: "Administrador general",
+  ADMIN: "Administrador",
+  STORE_OWNER: "Propietario de tienda",
+  STORE_MANAGER: "Encargado de tienda",
+  STORE_STAFF: "Personal de tienda",
+  CUSTOMER: "Cliente",
+  OPERATIONS: "Operaciones",
+  OPS: "Operaciones",
+  FINANCE: "Finanzas",
+  WAREHOUSE: "Almacén",
+};
+const roleLabel = (code: string) => ROLE_LABELS[code] ?? code;
+const AUDIT_LABELS: Record<string, string> = {
+  USER_CREATED: "Usuario creado",
+  USER_STATUS_CHANGED: "Estado de usuario actualizado",
+  USER_ROLE_GRANTED: "Rol asignado",
+  USER_ROLE_REVOKED: "Rol retirado",
+  USER_STORE_ACCESS_GRANTED: "Acceso a tienda asignado",
+  USER_STORE_ACCESS_REVOKED: "Acceso a tienda retirado",
+  USER_PASSWORD_RESET: "Contraseña restablecida",
+  USER_SESSIONS_REVOKED: "Sesiones cerradas",
+  AUTH_LOGIN_SUCCEEDED: "Inicio de sesión",
+  AUTH_REFRESH_REUSE_DETECTED: "Reutilización de sesión detectada",
+  AUTH_TOKEN_REFRESHED: "Sesión renovada",
+  AUTH_LOGOUT: "Cierre de sesión",
+  AUTH_PASSWORD_CHANGED: "Contraseña cambiada",
+  AUTH_PASSWORD_RECOVERED: "Contraseña recuperada",
+};
 
 function StatusBadge({ status }: Readonly<{ status: UserStatus }>) {
   return (
     <span className={`status-badge status-${status.toLowerCase()}`}>
-      {status.toLowerCase()}
+      {STATUS_LABELS[status]}
     </span>
   );
 }
@@ -246,12 +296,15 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
     <section className="admin-shell">
       <div className="admin-heading">
         <div>
-          <p className="eyebrow">Identity & access</p>
-          <h1>Users</h1>
-          <p>Control platform permissions and store scope.</p>
+          <p className="eyebrow">Identidad y accesos</p>
+          <div className="admin-title">
+            <h1>Usuarios</h1>
+            {!loading && <span className="result-count">{users.total}</span>}
+          </div>
+          <p>Equipo de Gami y personal de tiendas.</p>
         </div>
         <button className="primary-command" onClick={() => setCreateOpen(true)}>
-          <CirclePlus size={18} /> New user
+          <CirclePlus size={18} /> Nuevo usuario
         </button>
       </div>
 
@@ -259,15 +312,17 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
         <form className="search-form" onSubmit={handleSearch}>
           <Search size={18} />
           <input
-            aria-label="Search users"
-            placeholder="Search name, username, email or phone"
+            aria-label="Buscar usuarios"
+            placeholder="Buscar nombre, usuario, correo o teléfono"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <button type="submit">Search</button>
+          <button type="submit" aria-label="Buscar" title="Buscar">
+            <Search size={16} />
+          </button>
         </form>
         <select
-          aria-label="Filter by status"
+          aria-label="Filtrar por estado"
           value={status}
           onChange={(event) => {
             const next = event.target.value as UserStatus | "";
@@ -275,15 +330,15 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
             void load(1, search, next);
           }}
         >
-          <option value="">All statuses</option>
-          <option value="ACTIVE">Active</option>
-          <option value="SUSPENDED">Suspended</option>
-          <option value="DISABLED">Disabled</option>
+          <option value="">Todos los estados</option>
+          <option value="ACTIVE">Activo</option>
+          <option value="SUSPENDED">Suspendido</option>
+          <option value="DISABLED">Deshabilitado</option>
         </select>
         <button
           className="icon-button bordered"
-          title="Refresh users"
-          aria-label="Refresh users"
+          title="Actualizar usuarios"
+          aria-label="Actualizar usuarios"
           onClick={() => void load(users.page)}
         >
           <RefreshCw size={17} />
@@ -293,7 +348,10 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
       {error && (
         <p className="admin-alert" role="alert">
           {error}
-          <button onClick={() => setError("")} aria-label="Dismiss error">
+          <button
+            onClick={() => setError("")}
+            aria-label="Cerrar mensaje de error"
+          >
             <X size={16} />
           </button>
         </p>
@@ -303,11 +361,11 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
         <table className="user-table">
           <thead>
             <tr>
-              <th>User</th>
-              <th>Status</th>
+              <th>Usuario</th>
+              <th>Estado</th>
               <th>Roles</th>
-              <th>Store scope</th>
-              <th>Last login</th>
+              <th>Tiendas</th>
+              <th>Último acceso</th>
             </tr>
           </thead>
           <tbody>
@@ -335,10 +393,12 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                     <div className="tag-row">
                       {user.roles.length ? (
                         user.roles.map((role) => (
-                          <span key={role}>{role.replaceAll("_", " ")}</span>
+                          <span key={role} title={role}>
+                            {roleLabel(role)}
+                          </span>
                         ))
                       ) : (
-                        <em>No roles</em>
+                        <em>Sin roles</em>
                       )}
                     </div>
                   </td>
@@ -354,22 +414,23 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
               ))}
           </tbody>
         </table>
-        {loading && <div className="empty-state">Loading users...</div>}
+        {loading && <div className="empty-state">Cargando usuarios...</div>}
         {!loading && !users.data.length && (
-          <div className="empty-state">No users match these filters.</div>
+          <div className="empty-state">No hay usuarios con estos filtros.</div>
         )}
       </div>
 
       <footer className="table-footer">
         <span>
-          {users.total} users · Page {users.page} of {Math.max(users.pages, 1)}
+          {users.total} usuarios · Página {users.page} de{" "}
+          {Math.max(users.pages, 1)}
         </span>
         <div>
           <button
             className="icon-button bordered"
             disabled={users.page <= 1 || loading}
             onClick={() => void load(users.page - 1)}
-            aria-label="Previous page"
+            aria-label="Página anterior"
           >
             <ChevronLeft size={18} />
           </button>
@@ -377,7 +438,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
             className="icon-button bordered"
             disabled={users.page >= users.pages || loading}
             onClick={() => void load(users.page + 1)}
-            aria-label="Next page"
+            aria-label="Página siguiente"
           >
             <ChevronRight size={18} />
           </button>
@@ -386,17 +447,17 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
 
       {selected && (
         <div className="drawer-backdrop">
-          <aside className="user-drawer" aria-label="User details">
+          <aside className="user-drawer" aria-label="Detalle del usuario">
             <header>
               <div>
-                <p className="eyebrow">User profile</p>
+                <p className="eyebrow">Perfil del usuario</p>
                 <h2>{selected.displayName}</h2>
                 <span>@{selected.username}</span>
               </div>
               <button
                 className="icon-button"
                 onClick={() => setSelected(null)}
-                aria-label="Close user details"
+                aria-label="Cerrar detalle del usuario"
               >
                 <X />
               </button>
@@ -405,16 +466,17 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
               <StatusBadge status={selected.status} />
               <span>
                 {selected.mustChangePassword
-                  ? "Password change required"
-                  : "Password established"}
+                  ? "Debe cambiar su contraseña"
+                  : "Contraseña establecida"}
               </span>
-              <span>Created {formatDate(selected.createdAt)}</span>
+              <span>Creado el {formatDate(selected.createdAt)}</span>
+              <span>Último acceso: {formatDate(selected.lastLoginAt)}</span>
             </div>
             <div className="drawer-section">
               <div className="section-title">
-                <h3>Status</h3>
+                <h3>Estado</h3>
                 <select
-                  aria-label="Change user status"
+                  aria-label="Cambiar estado del usuario"
                   value={selected.status}
                   onChange={(event) =>
                     setAction({
@@ -423,9 +485,9 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                     })
                   }
                 >
-                  <option value="ACTIVE">Active</option>
-                  <option value="SUSPENDED">Suspended</option>
-                  <option value="DISABLED">Disabled</option>
+                  <option value="ACTIVE">Activo</option>
+                  <option value="SUSPENDED">Suspendido</option>
+                  <option value="DISABLED">Deshabilitado</option>
                 </select>
               </div>
             </div>
@@ -436,7 +498,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                 </h3>
                 {availableRoles.length > 0 && (
                   <select
-                    aria-label="Grant role"
+                    aria-label="Asignar rol"
                     value=""
                     onChange={(event) =>
                       event.target.value &&
@@ -446,10 +508,10 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                       })
                     }
                   >
-                    <option value="">Add role...</option>
+                    <option value="">Agregar rol...</option>
                     {availableRoles.map((role) => (
                       <option key={role.id} value={role.code}>
-                        {role.name}
+                        {ROLE_LABELS[role.code] ?? role.name}
                       </option>
                     ))}
                   </select>
@@ -458,13 +520,13 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
               <div className="access-list">
                 {selected.roles.map((role) => (
                   <div key={role}>
-                    <span>{role.replaceAll("_", " ")}</span>
+                    <span title={role}>{roleLabel(role)}</span>
                     <button
                       onClick={() =>
                         setAction({ kind: "revoke-role", roleCode: role })
                       }
                     >
-                      Remove
+                      Retirar
                     </button>
                   </div>
                 ))}
@@ -473,7 +535,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
             <div className="drawer-section">
               <div className="section-title">
                 <h3>
-                  <Store size={17} /> Store access
+                  <Store size={17} /> Acceso a tiendas
                 </h3>
                 <button
                   onClick={() =>
@@ -484,7 +546,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                     })
                   }
                 >
-                  Add access
+                  Agregar acceso
                 </button>
               </div>
               <div className="access-list">
@@ -494,7 +556,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                     <div key={membership.storeId}>
                       <span>
                         {membership.storeName}
-                        {membership.isOwner ? " · Owner" : ""}
+                        {membership.isOwner ? " · Propietario" : ""}
                       </span>
                       <button
                         onClick={() =>
@@ -504,34 +566,36 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                           })
                         }
                       >
-                        Remove
+                        Retirar
                       </button>
                     </div>
                   ))}
                 {!selected.storeMemberships.some(
                   (membership) => membership.active,
-                ) && <p>No active store access.</p>}
+                ) && <p>Sin acceso activo a tiendas.</p>}
               </div>
             </div>
             <div className="drawer-section danger-actions">
               <button onClick={() => setAction({ kind: "reset-password" })}>
-                <KeyRound size={16} /> Reset password
+                <KeyRound size={16} /> Restablecer contraseña
               </button>
               <button onClick={() => setAction({ kind: "revoke-sessions" })}>
-                Revoke all sessions
+                Cerrar todas las sesiones
               </button>
             </div>
             <div className="drawer-section">
-              <h3>Audit history</h3>
+              <h3>Historial de auditoría</h3>
               <div className="audit-list">
                 {audit.map((entry) => (
                   <article key={entry.id}>
-                    <strong>{entry.action.replaceAll("_", " ")}</strong>
+                    <strong title={entry.action}>
+                      {AUDIT_LABELS[entry.action] ?? entry.action}
+                    </strong>
                     <time>{formatDate(entry.occurredAt)}</time>
                     {entry.reason && <p>{entry.reason}</p>}
                   </article>
                 ))}
-                {!audit.length && <p>No audit entries found.</p>}
+                {!audit.length && <p>No hay registros de auditoría.</p>}
               </div>
             </div>
           </aside>
@@ -543,14 +607,14 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
           <div className="admin-modal">
             <header>
               <div>
-                <p className="eyebrow">New identity</p>
-                <h2>Create user</h2>
+                <p className="eyebrow">Nueva cuenta</p>
+                <h2>Crear usuario</h2>
               </div>
               <button
                 className="icon-button"
                 type="button"
                 onClick={() => setCreateOpen(false)}
-                aria-label="Close"
+                aria-label="Cerrar"
               >
                 <X />
               </button>
@@ -562,18 +626,16 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                     <span>
                       {
                         {
-                          username: "Username",
-                          displayName: "Display name",
-                          email: "Email (optional)",
-                          phone: "Phone (optional)",
+                          username: "Usuario",
+                          displayName: "Nombre completo",
+                          email: "Correo electrónico",
+                          phone: "Teléfono (opcional)",
                         }[field]
                       }
                     </span>
                     <span className="input-shell">
                       <input
-                        required={
-                          field === "username" || field === "displayName"
-                        }
+                        required={field !== "phone"}
                         type={field === "email" ? "email" : "text"}
                         value={newUser[field] ?? ""}
                         onChange={(event) =>
@@ -592,7 +654,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                 type="submit"
                 disabled={pending}
               >
-                Create user
+                Crear usuario
               </button>
             </form>
           </div>
@@ -604,14 +666,14 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
           <div className="admin-modal">
             <header>
               <div>
-                <p className="eyebrow">Audited action</p>
-                <h2>{action.kind.replaceAll("-", " ")}</h2>
+                <p className="eyebrow">Acción con registro de auditoría</p>
+                <h2>{ACTION_LABELS[action.kind]}</h2>
               </div>
               <button
                 className="icon-button"
                 type="button"
                 onClick={() => setAction(null)}
-                aria-label="Close"
+                aria-label="Cerrar"
               >
                 <X />
               </button>
@@ -620,7 +682,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
               {action.kind === "grant-store" && (
                 <>
                   <label className="field">
-                    <span>Store UUID</span>
+                    <span>Identificador de tienda (UUID)</span>
                     <span className="input-shell">
                       <input
                         required
@@ -639,23 +701,23 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                         setAction({ ...action, isOwner: event.target.checked })
                       }
                     />{" "}
-                    Store owner
+                    Propietario de tienda
                   </label>
                   <p className="dependency-note">
-                    Store discovery depends on the upcoming Stores module. Enter
-                    a known store UUID for now.
+                    El selector de tiendas está pendiente. Ingresa el UUID de
+                    una tienda existente.
                   </p>
                 </>
               )}
               <label className="field">
-                <span>Reason</span>
+                <span>Motivo</span>
                 <textarea
                   required
                   minLength={3}
                   maxLength={255}
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="Explain the business reason for this change."
+                  placeholder="Indica el motivo de este cambio."
                 />
               </label>
               <button
@@ -663,7 +725,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                 type="submit"
                 disabled={pending}
               >
-                {pending ? "Applying..." : "Confirm action"}
+                {pending ? "Aplicando..." : "Confirmar acción"}
               </button>
             </form>
           </div>
@@ -676,15 +738,15 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
             <div className="section-icon">
               <UserRound size={22} />
             </div>
-            <p className="eyebrow">Shown once</p>
-            <h2>Temporary password</h2>
-            <p>Deliver this credential through an approved secure channel.</p>
+            <p className="eyebrow">Se muestra una sola vez</p>
+            <h2>Contraseña temporal</h2>
+            <p>Entrega esta contraseña por un canal seguro autorizado.</p>
             <div className="temporary-secret">
               <code>{temporaryPassword}</code>
               <button
                 className="icon-button"
-                title="Copy temporary password"
-                aria-label="Copy temporary password"
+                title="Copiar contraseña temporal"
+                aria-label="Copiar contraseña temporal"
                 onClick={() =>
                   void navigator.clipboard.writeText(temporaryPassword)
                 }
@@ -696,7 +758,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
               className="primary-button"
               onClick={() => setTemporaryPassword("")}
             >
-              I have stored it securely
+              Ya la guardé de forma segura
             </button>
           </div>
         </div>

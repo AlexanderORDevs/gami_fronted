@@ -2,15 +2,20 @@
 
 import {
   ArrowRight,
+  Dices,
   Eye,
   EyeOff,
   KeyRound,
   LogOut,
+  LayoutDashboard,
   ShieldCheck,
   Store,
   Users,
 } from "lucide-react";
-import { SyntheticEvent, useEffect, useState } from "react";
+import { type ReactNode, SyntheticEvent, useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ApiError,
   AuthSession,
@@ -18,12 +23,165 @@ import {
   getCurrentUser,
   login,
   logout,
+  PasswordChangeResult,
+  recoverPassword,
   refreshSession,
+  requestPasswordReset,
 } from "@/lib/auth-api";
 import { AdminPanel } from "./admin-panel";
+import { StoreManagement } from "./store-management";
+import {
+  ADMIN_SECTIONS,
+  AdminInformation,
+  useAdminSection,
+  type AdminSection,
+} from "./admin-information";
 
 const SESSION_KEY = "gami.auth.session";
 let refreshInFlight: Promise<AuthSession> | null = null;
+
+type PublicView = "login" | "reset-password";
+
+function AuthBrand() {
+  return (
+    <header className="auth-brand">
+      <Link href="/" aria-label="Volver al catálogo de Gami">
+        <Image
+          src="/gami-mark.svg"
+          width={72}
+          height={60}
+          alt="Gami"
+          priority
+        />
+      </Link>
+      <p>Portal de tiendas y administración</p>
+      <Link href="/" className="text-button">
+        Volver al catálogo
+      </Link>
+    </header>
+  );
+}
+
+function WorkspaceFrame({
+  session,
+  section,
+  pending,
+  onPasswordChange,
+  onLogout,
+  children,
+}: Readonly<{
+  session: AuthSession;
+  section: AdminSection;
+  pending: boolean;
+  onPasswordChange: () => void;
+  onLogout: () => Promise<void>;
+  children: ReactNode;
+}>) {
+  const isAdmin = session.user.roles.includes("SUPER_ADMIN");
+  const workspaceName = isAdmin ? "Administración" : "Mi tienda";
+  const sectionLabel = ADMIN_SECTIONS.find(
+    (item) => item.id === section,
+  )!.label;
+  return (
+    <div className="workspace">
+      <aside className="workspace-sidebar" aria-label="Navegación del portal">
+        <div className="sidebar-brand">
+          <Image src="/gami-mark.svg" width={48} height={40} alt="Gami" />
+          <span>{workspaceName}</span>
+        </div>
+        <p className="sidebar-label">Portal</p>
+        <nav aria-label="Navegación principal">
+          {isAdmin ? (
+            ADMIN_SECTIONS.map((item) => (
+              <a
+                key={item.id}
+                className="workspace-nav-link"
+                href={`#${item.id}`}
+                aria-current={section === item.id ? "page" : undefined}
+              >
+                <item.icon size={18} />
+                {item.label}
+              </a>
+            ))
+          ) : (
+            <a
+              className="workspace-nav-link"
+              href="#workspace-main"
+              aria-current="page"
+            >
+              <LayoutDashboard size={18} /> Resumen
+            </a>
+          )}
+        </nav>
+        <div className="sidebar-footer">
+          <ShieldCheck size={16} /> Operaciones Gami
+        </div>
+      </aside>
+      <div className="workspace-body">
+        <header className="workspace-header">
+          <div className="workspace-breadcrumb">
+            <span>{workspaceName}</span>
+            <span aria-hidden="true">/</span>
+            <strong>{isAdmin ? sectionLabel : "Resumen"}</strong>
+          </div>
+          <div className="profile">
+            <span className="profile-avatar" aria-hidden="true">
+              {session.user.displayName.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="profile-name">{session.user.displayName}</span>
+            <button
+              className="icon-button bordered"
+              onClick={onPasswordChange}
+              aria-label="Cambiar contraseña"
+              title="Cambiar contraseña"
+            >
+              <KeyRound size={18} />
+            </button>
+            <button
+              className="icon-button bordered"
+              onClick={onLogout}
+              disabled={pending}
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </header>
+        <main id="workspace-main" tabIndex={-1}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function generateSuggestedPassword() {
+  const groups = [
+    "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    "abcdefghijkmnopqrstuvwxyz",
+    "23456789",
+    "!@#$%&*?",
+  ];
+  const characters = groups.join("");
+  const randomIndex = (length: number) => {
+    const value = new Uint32Array(1);
+    crypto.getRandomValues(value);
+    return value[0] % length;
+  };
+  const password = groups.map((group) => group[randomIndex(group.length)]);
+  while (password.length < 16) {
+    password.push(characters[randomIndex(characters.length)]);
+  }
+  for (let index = password.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomIndex(index + 1);
+    [password[index], password[swapIndex]] = [
+      password[swapIndex],
+      password[index],
+    ];
+  }
+  return password.join("");
+}
 
 function rotateSession(refreshToken: string) {
   refreshInFlight ??= refreshSession(refreshToken).finally(() => {
@@ -63,8 +221,8 @@ function PasswordInput({
           className="icon-button"
           type="button"
           onClick={() => setVisible((current) => !current)}
-          aria-label={visible ? "Hide password" : "Show password"}
-          title={visible ? "Hide password" : "Show password"}
+          aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+          title={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
         >
           {visible ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
@@ -73,15 +231,54 @@ function PasswordInput({
   );
 }
 
-export function AuthPortal() {
+function PasswordSuggestion({
+  onUse,
+}: Readonly<{
+  onUse: (password: string) => void;
+}>) {
+  return (
+    <div className="password-guidance">
+      <span>
+        Usa al menos 12 caracteres. Combina letras, números y símbolos.
+      </span>
+      <button type="button" onClick={() => onUse(generateSuggestedPassword())}>
+        <Dices size={16} /> Sugerir contraseña
+      </button>
+    </div>
+  );
+}
+
+function PasswordError({ message }: Readonly<{ message: string }>) {
+  return message ? (
+    <p className="form-error" role="alert">
+      {message}
+    </p>
+  ) : null;
+}
+
+function useSuggestedPassword(
+  setNewPassword: (password: string) => void,
+  setConfirmation: (password: string) => void,
+) {
+  return (suggestion: string) => {
+    setNewPassword(suggestion);
+    setConfirmation(suggestion);
+  };
+}
+
+function useManagedSession() {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
+
+  function persist(nextSession: AuthSession) {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+    setSession(nextSession);
+  }
+
+  function clear() {
+    window.sessionStorage.removeItem(SESSION_KEY);
+    setSession(null);
+  }
 
   useEffect(() => {
     let active = true;
@@ -124,16 +321,141 @@ export function AuthPortal() {
       try {
         persist(await rotateSession(session.tokens.refreshToken));
       } catch {
-        window.sessionStorage.removeItem(SESSION_KEY);
-        setSession(null);
+        clear();
       }
     }, renewAfter);
     return () => window.clearTimeout(timer);
   }, [session]);
 
-  function persist(nextSession: AuthSession) {
-    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
-    setSession(nextSession);
+  return { ready, session, persist, clear };
+}
+
+type PasswordActionsOptions = {
+  session: AuthSession | null;
+  currentPassword: string;
+  recoveryEmail: string;
+  recoveryCode: string;
+  newPassword: string;
+  confirmation: string;
+  persist: (session: AuthSession) => void;
+  clearFields: () => void;
+  setError: (message: string) => void;
+  setPending: (pending: boolean) => void;
+  onCompleted: (result: PasswordChangeResult) => void;
+};
+
+function usePasswordActions(options: PasswordActionsOptions) {
+  async function update(accessToken: string) {
+    const result = await changePassword(
+      accessToken,
+      options.session?.user.mustChangePassword
+        ? undefined
+        : options.currentPassword,
+      options.newPassword,
+    );
+    options.onCompleted(result);
+    options.clearFields();
+  }
+
+  async function run(action: () => Promise<void>) {
+    options.setError("");
+    if (options.newPassword !== options.confirmation) {
+      options.setError("Las contraseñas nuevas no coinciden.");
+      return;
+    }
+    options.setPending(true);
+    try {
+      await action();
+    } catch (error_) {
+      options.setError(
+        error_ instanceof Error
+          ? error_.message
+          : "No se pudo cambiar la contraseña.",
+      );
+    } finally {
+      options.setPending(false);
+    }
+  }
+
+  function authenticated(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void run(() => update(options.session!.tokens.accessToken));
+  }
+
+  function recover(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void run(async () => {
+      const result = await recoverPassword(
+        options.recoveryEmail.trim(),
+        options.recoveryCode.trim(),
+        options.newPassword,
+      );
+      options.onCompleted(result);
+      options.clearFields();
+    });
+  }
+
+  return { authenticated, recover };
+}
+
+export function AuthPortal() {
+  const router = useRouter();
+  const section = useAdminSection();
+  const { ready, session, persist, clear } = useManagedSession();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [resetCodeSent, setResetCodeSent] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const [publicView, setPublicView] = useState<PublicView>("login");
+  const [voluntaryChange, setVoluntaryChange] = useState(false);
+  const useSuggestion = useSuggestedPassword(setNewPassword, setConfirmation);
+
+  const passwordActions = usePasswordActions({
+    session,
+    currentPassword: password,
+    recoveryEmail,
+    recoveryCode,
+    newPassword,
+    confirmation,
+    persist,
+    clearFields: () => {
+      setPassword("");
+      setNewPassword("");
+      setConfirmation("");
+    },
+    setError,
+    setPending,
+    onCompleted: (result) => {
+      persist({ tokens: result.tokens, user: result.user });
+      setRecoveryCodes(result.recoveryCodes);
+      setRecoveryCode("");
+      setRecoveryEmail("");
+      setResetCodeSent(false);
+    },
+  });
+
+  async function handleResetRequest(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setPending(true);
+    try {
+      await requestPasswordReset(recoveryEmail.trim());
+      setResetCodeSent(true);
+    } catch (error_) {
+      setError(
+        error_ instanceof Error
+          ? error_.message
+          : "No se pudo enviar el correo de recuperación.",
+      );
+    } finally {
+      setPending(false);
+    }
   }
 
   async function handleLogin(event: SyntheticEvent<HTMLFormElement>) {
@@ -145,37 +467,7 @@ export function AuthPortal() {
       setPassword("");
     } catch {
       setError(
-        "We could not sign you in. Check your credentials and try again.",
-      );
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function handlePasswordChange(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    if (newPassword !== confirmation) {
-      setError("The new passwords do not match.");
-      return;
-    }
-    setPending(true);
-    try {
-      persist(
-        await changePassword(
-          session!.tokens.accessToken,
-          password,
-          newPassword,
-        ),
-      );
-      setPassword("");
-      setNewPassword("");
-      setConfirmation("");
-    } catch (error_) {
-      setError(
-        error_ instanceof Error
-          ? error_.message
-          : "The password could not be changed.",
+        "No pudimos iniciar sesión. Revisa tu usuario y contraseña e inténtalo de nuevo.",
       );
     } finally {
       setPending(false);
@@ -188,88 +480,130 @@ export function AuthPortal() {
     try {
       await logout(session.tokens.accessToken);
     } finally {
-      window.sessionStorage.removeItem(SESSION_KEY);
-      setSession(null);
+      clear();
+      setVoluntaryChange(false);
       setPending(false);
+      router.push("/");
     }
   }
 
   if (!ready) {
-    return <main className="loading-screen" aria-label="Loading session" />;
+    return <main className="loading-screen" aria-label="Cargando sesión" />;
   }
 
-  if (session?.user.mustChangePassword) {
+  if (recoveryCodes.length) {
     return (
       <main className="auth-layout">
-        <section className="brand-panel">
-          <div className="brand-mark">G</div>
-          <div className="brand-copy">
-            <p>Gami operations</p>
-            <h1>Secure access starts with you.</h1>
-            <p>
-              Replace your temporary password before entering the operational
-              workspace.
+        <AuthBrand />
+        <section className="form-panel">
+          <div className="form-wrap">
+            <div className="section-icon">
+              <KeyRound size={24} />
+            </div>
+            <p className="eyebrow">Se muestran una sola vez</p>
+            <h2>Códigos de recuperación</h2>
+            <p className="supporting-copy">
+              Guarda estos cinco códigos. Los anteriores ya no son válidos.
             </p>
-          </div>
-          <div className="security-note">
-            <ShieldCheck size={20} />
-            <span>Your previous sessions will be closed automatically.</span>
+            <div className="recovery-code-list">
+              {recoveryCodes.map((code) => (
+                <code key={code}>{code}</code>
+              ))}
+            </div>
+            <button
+              className="secondary-button full-button"
+              type="button"
+              onClick={() =>
+                void navigator.clipboard.writeText(recoveryCodes.join("\n"))
+              }
+            >
+              Copiar todos los códigos
+            </button>
+            <button
+              className="primary-button full-button"
+              type="button"
+              onClick={() => setRecoveryCodes([])}
+            >
+              Ya los guardé de forma segura <ArrowRight size={18} />
+            </button>
           </div>
         </section>
+      </main>
+    );
+  }
+
+  if (session?.user.mustChangePassword || (session && voluntaryChange)) {
+    return (
+      <main className="auth-layout">
+        <AuthBrand />
 
         <section className="form-panel">
           <div className="form-wrap">
             <div className="section-icon">
               <KeyRound size={24} />
             </div>
-            <p className="eyebrow">Required security step</p>
-            <h2>Create a permanent password</h2>
-            <p className="supporting-copy">
-              Welcome, {session.user.displayName}. Use at least 12 characters.
+            <p className="eyebrow">
+              {session.user.mustChangePassword
+                ? "Cambio obligatorio"
+                : "Seguridad de la cuenta"}
             </p>
-            <form onSubmit={handlePasswordChange}>
-              <PasswordInput
-                id="current-password"
-                label="Temporary password"
-                value={password}
-                onChange={setPassword}
-                autoComplete="current-password"
-              />
+            <h2>
+              {session.user.mustChangePassword
+                ? "Crea tu contraseña definitiva"
+                : "Cambia tu contraseña"}
+            </h2>
+            <p className="supporting-copy">
+              Hola, {session.user.displayName}. Elige y confirma una contraseña
+              única para esta cuenta.
+            </p>
+            <form onSubmit={passwordActions.authenticated}>
+              {!session.user.mustChangePassword && (
+                <PasswordInput
+                  id="current-password"
+                  label="Contraseña actual"
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete="current-password"
+                />
+              )}
               <PasswordInput
                 id="new-password"
-                label="New password"
+                label="Nueva contraseña"
                 value={newPassword}
                 onChange={setNewPassword}
                 autoComplete="new-password"
               />
+              <PasswordSuggestion onUse={useSuggestion} />
               <PasswordInput
                 id="confirmation"
-                label="Confirm new password"
+                label="Confirmar nueva contraseña"
                 value={confirmation}
                 onChange={setConfirmation}
                 autoComplete="new-password"
               />
-              {error && (
-                <p className="form-error" role="alert">
-                  {error}
-                </p>
-              )}
+              <PasswordError message={error} />
               <button
                 className="primary-button"
                 disabled={pending}
                 type="submit"
               >
-                <span>{pending ? "Updating..." : "Update password"}</span>
+                <span>
+                  {pending ? "Actualizando..." : "Actualizar contraseña"}
+                </span>
                 <ArrowRight size={18} />
               </button>
             </form>
             <button
               className="text-button"
               type="button"
-              onClick={handleLogout}
+              onClick={
+                session.user.mustChangePassword
+                  ? handleLogout
+                  : () => setVoluntaryChange(false)
+              }
               disabled={pending}
             >
-              Sign out
+              {session.user.mustChangePassword ? "Cerrar sesión" : "Cancelar"}
             </button>
           </div>
         </section>
@@ -280,86 +614,178 @@ export function AuthPortal() {
   if (session) {
     const canAdministerUsers = session.user.roles.includes("SUPER_ADMIN");
     return (
-      <main className="workspace">
-        <header className="workspace-header">
-          <div className="brand-lockup">
-            <span className="brand-mark small">G</span>
-            <strong>Gami</strong>
-          </div>
-          <div className="profile">
-            <span>{session.user.displayName}</span>
-            <button
-              className="icon-button bordered"
-              onClick={handleLogout}
-              disabled={pending}
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
-        </header>
+      <WorkspaceFrame
+        session={session}
+        section={section}
+        pending={pending}
+        onPasswordChange={() => setVoluntaryChange(true)}
+        onLogout={handleLogout}
+      >
         {canAdministerUsers ? (
-          <AdminPanel accessToken={session.tokens.accessToken} />
+          <AdministrativeContent
+            accessToken={session.tokens.accessToken}
+            section={section}
+          />
         ) : (
           <section className="workspace-content">
-            <p className="eyebrow">Operations workspace</p>
-            <h1>Good to see you, {session.user.displayName.split(" ")[0]}.</h1>
+            <p className="eyebrow">Portal de operaciones</p>
+            <h1>Hola, {session.user.displayName.split(" ")[0]}.</h1>
             <p className="supporting-copy">
-              Your identity is verified and your workspace is ready.
+              Tu sesión está activa. Los módulos de tu tienda estarán
+              disponibles próximamente.
             </p>
             <div className="module-grid">
               <article>
                 <Users size={22} />
                 <div>
-                  <h2>Users & access</h2>
-                  <p>Manage roles, sessions and store memberships.</p>
+                  <h2>Usuarios y accesos</h2>
+                  <p>La administración gestiona los permisos de tu cuenta.</p>
                 </div>
-                <span>Ready</span>
+                <span>Acceso restringido</span>
               </article>
               <article>
                 <Store size={22} />
                 <div>
-                  <h2>Stores</h2>
-                  <p>Store operations will be connected in the next module.</p>
+                  <h2>Tiendas</h2>
+                  <p>La gestión de prendas y operaciones está pendiente.</p>
                 </div>
-                <span className="muted-status">Next</span>
+                <span className="muted-status">Próximamente</span>
               </article>
             </div>
           </section>
         )}
+      </WorkspaceFrame>
+    );
+  }
+
+  if (publicView === "reset-password") {
+    return (
+      <main className="auth-layout">
+        <AuthBrand />
+        <section className="form-panel">
+          <div className="form-wrap">
+            <div className="section-icon">
+              <KeyRound size={24} />
+            </div>
+            <p className="eyebrow">Recuperar contraseña</p>
+            <h2>
+              {resetCodeSent ? "Ingresa el código" : "Recupera tu cuenta"}
+            </h2>
+            <p className="supporting-copy">
+              {resetCodeSent
+                ? `Si hay una cuenta activa con ${recoveryEmail} y el correo está habilitado, recibirás un código. Vence en 15 minutos. Si no llega, contacta a un administrador.`
+                : "Ingresa el correo de tu cuenta Gami. Si el envío de correo no está disponible, solicita una contraseña temporal a un administrador."}
+            </p>
+            {!resetCodeSent ? (
+              <form onSubmit={handleResetRequest}>
+                <label className="field" htmlFor="recovery-email">
+                  <span>Correo electrónico</span>
+                  <span className="input-shell">
+                    <input
+                      id="recovery-email"
+                      type="email"
+                      value={recoveryEmail}
+                      onChange={(event) => setRecoveryEmail(event.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </span>
+                </label>
+                <PasswordError message={error} />
+                <button
+                  className="primary-button"
+                  disabled={pending}
+                  type="submit"
+                >
+                  <span>{pending ? "Enviando..." : "Enviar código"}</span>
+                  <ArrowRight size={18} />
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={passwordActions.recover}>
+                <label className="field" htmlFor="recovery-code">
+                  <span>Código recibido por correo</span>
+                  <span className="input-shell">
+                    <input
+                      id="recovery-code"
+                      value={recoveryCode}
+                      onChange={(event) => setRecoveryCode(event.target.value)}
+                      autoComplete="one-time-code"
+                      required
+                    />
+                  </span>
+                </label>
+                <PasswordInput
+                  id="recovery-new-password"
+                  label="Nueva contraseña"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  autoComplete="new-password"
+                />
+                <PasswordSuggestion onUse={useSuggestion} />
+                <PasswordInput
+                  id="recovery-confirmation"
+                  label="Confirmar nueva contraseña"
+                  value={confirmation}
+                  onChange={setConfirmation}
+                  autoComplete="new-password"
+                />
+                <PasswordError message={error} />
+                <button
+                  className="primary-button"
+                  disabled={pending}
+                  type="submit"
+                >
+                  <span>
+                    {pending ? "Restableciendo..." : "Restablecer contraseña"}
+                  </span>
+                  <ArrowRight size={18} />
+                </button>
+              </form>
+            )}
+            {resetCodeSent && (
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setRecoveryCode("");
+                  setResetCodeSent(false);
+                }}
+              >
+                Usar otro correo
+              </button>
+            )}
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => {
+                setError("");
+                setResetCodeSent(false);
+                setPublicView("login");
+              }}
+            >
+              Volver al inicio de sesión
+            </button>
+          </div>
+        </section>
       </main>
     );
   }
 
   return (
     <main className="auth-layout">
-      <section className="brand-panel">
-        <div className="brand-mark">G</div>
-        <div className="brand-copy">
-          <p>Gami marketplace</p>
-          <h1>Every operation, in one clear view.</h1>
-          <p>
-            Manage commerce, stores and teams from a workspace built for daily
-            decisions.
-          </p>
-        </div>
-        <div className="signal-row">
-          <span>Identity</span>
-          <span>Inventory</span>
-          <span>Operations</span>
-        </div>
-      </section>
+      <AuthBrand />
       <section className="form-panel">
         <div className="form-wrap">
-          <p className="eyebrow">Operations portal</p>
-          <h2>Sign in to Gami</h2>
+          <p className="eyebrow">Portal de operaciones</p>
+          <h2>Ingresa a Gami</h2>
           <p className="supporting-copy">
-            Use your assigned platform credentials.
+            Usa el usuario y la contraseña asignados a tu cuenta.
           </p>
           <form onSubmit={handleLogin}>
             <label className="field" htmlFor="username">
-              <span>Username</span>
+              <span>Usuario</span>
               <span className="input-shell">
                 <input
                   id="username"
@@ -372,26 +798,49 @@ export function AuthPortal() {
             </label>
             <PasswordInput
               id="password"
-              label="Password"
+              label="Contraseña"
               value={password}
               onChange={setPassword}
               autoComplete="current-password"
             />
-            {error && (
-              <p className="form-error" role="alert">
-                {error}
-              </p>
-            )}
+            <PasswordError message={error} />
             <button className="primary-button" disabled={pending} type="submit">
-              <span>{pending ? "Signing in..." : "Continue"}</span>
+              <span>{pending ? "Ingresando..." : "Continuar"}</span>
               <ArrowRight size={18} />
             </button>
           </form>
           <p className="form-footnote">
-            Access is restricted to authorized Gami team members.
+            Acceso exclusivo para tiendas y personal autorizado de Gami.
           </p>
+          <div className="login-options">
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setPublicView("reset-password");
+              }}
+            >
+              Recuperar contraseña
+            </button>
+          </div>
         </div>
       </section>
     </main>
+  );
+}
+
+function AdministrativeContent({
+  accessToken,
+  section,
+}: Readonly<{ accessToken: string; section: AdminSection }>) {
+  if (section === "users") return <AdminPanel accessToken={accessToken} />;
+  if (section === "stores")
+    return <StoreManagement key={accessToken} accessToken={accessToken} />;
+  return (
+    <AdminInformation
+      key={section}
+      accessToken={accessToken}
+      section={section}
+    />
   );
 }

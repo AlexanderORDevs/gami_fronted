@@ -18,6 +18,10 @@ export type AuthSession = {
   user: AuthUser;
 };
 
+export type PasswordChangeResult = AuthSession & {
+  recoveryCodes: string[];
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -31,6 +35,62 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
   "http://localhost:4000/api";
 
+export function localizedApiError(
+  message: string | undefined,
+  status: number,
+): string {
+  const messages: Record<string, string> = {
+    "La hora de cierre debe ser posterior a la apertura.":
+      "La hora de cierre debe ser posterior a la apertura.",
+    "Los turnos del mismo día no pueden superponerse.":
+      "Los turnos del mismo día no pueden superponerse.",
+    "Una tienda cerrada o rechazada no admite cambios.":
+      "Una tienda cerrada o rechazada no admite cambios.",
+    "Una tienda activa debe conservar al menos un horario.":
+      "Una tienda activa debe conservar al menos un horario.",
+    "La tienda cambió desde que la abriste. Recarga el detalle antes de guardar.":
+      "La tienda cambió desde que la abriste. Recarga el detalle antes de guardar.",
+    "Ese número de WhatsApp ya está registrado en otra tienda.":
+      "Ese número de WhatsApp ya está registrado en otra tienda.",
+    "The current password is incorrect.": "La contraseña actual es incorrecta.",
+    "The new password must be different.":
+      "La nueva contraseña debe ser diferente a la anterior.",
+    "Invalid or expired recovery code.":
+      "El código de recuperación es inválido o ha vencido.",
+    "Password reset email delivery is not configured.":
+      "El envío de correo no está configurado. Solicita una contraseña temporal a un administrador.",
+    "The password reset email could not be sent. Try again later.":
+      "No se pudo enviar el correo. Inténtalo más tarde o contacta a un administrador.",
+    "Username, email, or phone already exists.":
+      "El usuario, correo o teléfono ya está registrado.",
+    "You cannot block your own account.":
+      "No puedes bloquear tu propia cuenta.",
+    "You cannot revoke your own SUPER_ADMIN role.":
+      "No puedes retirar tu propio rol de administrador general.",
+    "The last active SUPER_ADMIN cannot be blocked or demoted.":
+      "Debe quedar al menos un administrador general activo.",
+    "Use change-password for your own account.":
+      "Usa la opción Cambiar contraseña para tu propia cuenta.",
+    "Store was not found.": "No se encontró la tienda.",
+    "User was not found.": "No se encontró el usuario.",
+    "The user does not have this role.": "El usuario no tiene este rol.",
+    "Active store membership was not found.":
+      "No se encontró un acceso activo a esta tienda.",
+  };
+  if (message && messages[message]) return messages[message];
+  if (status === 400)
+    return "Revisa los campos ingresados. La contraseña debe tener al menos 12 caracteres y los identificadores deben ser válidos.";
+  if (status === 401)
+    return "La sesión o las credenciales no son válidas. Vuelve a iniciar sesión.";
+  if (status === 403) return "No tienes permisos para realizar esta operación.";
+  if (status === 404) return "No se encontró el registro solicitado.";
+  if (status === 409)
+    return "Los datos entran en conflicto con un registro existente.";
+  if (status === 429)
+    return "Demasiados intentos. Espera un momento antes de volver a intentarlo.";
+  return "No se pudo completar la solicitud. Inténtalo de nuevo más tarde.";
+}
+
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -38,6 +98,10 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
       "Content-Type": "application/json",
       ...init.headers,
     },
+  }).catch(() => {
+    throw new Error(
+      "No se pudo conectar con Gami. Revisa tu conexión e inténtalo de nuevo.",
+    );
   });
 
   if (!response.ok) {
@@ -48,7 +112,7 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
       ? payload.message.join(" ")
       : payload?.message;
     throw new ApiError(
-      message ?? "The request could not be completed.",
+      localizedApiError(message, response.status),
       response.status,
     );
   }
@@ -65,13 +129,31 @@ export function login(username: string, password: string) {
 
 export function changePassword(
   accessToken: string,
-  currentPassword: string,
+  currentPassword: string | undefined,
   newPassword: string,
 ) {
-  return request<AuthSession>("/auth/change-password", {
+  return request<PasswordChangeResult>("/auth/change-password", {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+export function requestPasswordReset(email: string) {
+  return request<{ message: string }>("/auth/request-password-reset", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function recoverPassword(
+  email: string,
+  recoveryCode: string,
+  newPassword: string,
+) {
+  return request<PasswordChangeResult>("/auth/recover-password", {
+    method: "POST",
+    body: JSON.stringify({ email, recoveryCode, newPassword }),
   });
 }
 
@@ -96,6 +178,6 @@ export async function logout(accessToken: string) {
   });
 
   if (!response.ok && response.status !== 401) {
-    throw new Error("The session could not be closed.");
+    throw new Error("No se pudo cerrar la sesión en el servidor.");
   }
 }

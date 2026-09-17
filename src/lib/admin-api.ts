@@ -1,4 +1,4 @@
-import { ApiError } from "./auth-api";
+import { ApiError, localizedApiError } from "./auth-api";
 
 export type UserStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
 
@@ -63,7 +63,7 @@ export type AuditList = {
 export type CreateUserInput = {
   username: string;
   displayName: string;
-  email?: string;
+  email: string;
   phone?: string;
 };
 
@@ -83,6 +83,10 @@ async function adminRequest<T>(
       Authorization: `Bearer ${accessToken}`,
       ...init.headers,
     },
+  }).catch(() => {
+    throw new Error(
+      "No se pudo conectar con Gami. Revisa tu conexión e inténtalo de nuevo.",
+    );
   });
 
   if (!response.ok) {
@@ -93,7 +97,7 @@ async function adminRequest<T>(
       ? payload.message.join(" ")
       : payload?.message;
     throw new ApiError(
-      message ?? "The request could not be completed.",
+      localizedApiError(message, response.status),
       response.status,
     );
   }
@@ -104,6 +108,112 @@ async function adminRequest<T>(
 
 export function listRoles(accessToken: string) {
   return adminRequest<Role[]>(accessToken, "/admin/roles");
+}
+
+export type StoreHour = {
+  dayOfWeek: number;
+  opensAt: string;
+  closesAt: string;
+};
+export type StoreInput = {
+  displayName: string;
+  legalName: string;
+  gallery: string;
+  standNumber: string;
+  whatsappNumber: string;
+  hours: StoreHour[];
+  reason: string;
+};
+export type StoreDetail = Omit<
+  StoreInput,
+  "reason" | "legalName" | "gallery" | "standNumber"
+> & {
+  id: string;
+  legalName: string | null;
+  gallery: string | null;
+  standNumber: string | null;
+  status: string;
+  whatsappVerifiedAt: string | null;
+  updatedAt: string;
+  createdAt: string;
+  members: {
+    userId: string;
+    isOwner: boolean;
+    user: { displayName: string; username: string; status: string };
+  }[];
+};
+export type StoreAudit = {
+  id: string;
+  action: string;
+  reason: string | null;
+  actor: string | null;
+  occurredAt: string;
+};
+export function getStore(accessToken: string, id: string) {
+  return adminRequest<StoreDetail>(accessToken, `/admin/stores/${id}`, {
+    cache: "no-store",
+  });
+}
+export function saveStore(
+  accessToken: string,
+  input: StoreInput,
+  existing?: { id: string; updatedAt: string },
+) {
+  return adminRequest<StoreDetail>(
+    accessToken,
+    existing ? `/admin/stores/${existing.id}` : "/admin/stores",
+    {
+      method: existing ? "PATCH" : "POST",
+      body: JSON.stringify({
+        ...input,
+        ...(existing ? { updatedAt: existing.updatedAt } : {}),
+      }),
+    },
+  );
+}
+export function getStoreAudit(accessToken: string, id: string) {
+  return adminRequest<StoreAudit[]>(
+    accessToken,
+    `/admin/stores/${id}/audit-log`,
+    { cache: "no-store" },
+  );
+}
+
+export type InformationResource =
+  | "stores"
+  | "products"
+  | "orders"
+  | "shipments"
+  | "payouts"
+  | "ledger"
+  | "settings"
+  | "calendar"
+  | "shipping-rates";
+export type InformationRow = { id: string } & Record<
+  string,
+  string | number | boolean | null
+>;
+export type InformationPage = {
+  data: InformationRow[];
+  total: number;
+  page: number;
+  pages: number;
+};
+
+export function getAdminInformation(
+  accessToken: string,
+  resource: InformationResource,
+  page: number,
+  search: string,
+  signal: AbortSignal,
+) {
+  const parameters = new URLSearchParams({ page: String(page) });
+  if (search.trim()) parameters.set("search", search.trim());
+  return adminRequest<InformationPage>(
+    accessToken,
+    `/admin/information/${resource}?${parameters}`,
+    { signal, cache: "no-store" },
+  );
 }
 
 export function listUsers(

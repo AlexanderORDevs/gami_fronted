@@ -1,0 +1,223 @@
+.workspace-sidebar nav {
+  display: grid;
+  gap: 5px;
+}
+.workspace-nav-link {
+  background: transparent;
+  color: var(--muted);
+  min-width: 0;
+}
+.workspace-nav-link:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.workspace-nav-link[aria-current="page"] {
+  background: var(--ink);
+  color: var(--surface);
+}
+.workspace-nav-link svg {
+  flex-shrink: 0;
+}
+.information-shell {
+  min-width: 0;
+}
+.information-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.information-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  margin: 24px 0;
+}
+.information-tabs button {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 12px 0;
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: 13px;
+}
+.information-tabs button[aria-current="page"] {
+  border-color: var(--action);
+  color: var(--ink);
+  font-weight: 600;
+}
+.information-toolbar {
+  margin-bottom: 20px;
+}
+.information-table-wrap {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: white;
+}
+.information-table {
+  width: 100%;
+  min-width: 660px;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+.information-table th {
+  padding: 14px 16px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+.information-table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+.information-table td:first-child {
+  font-weight: 500;
+}
+.information-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.information-table tbody tr:hover {
+  background: var(--surface);
+}
+.information-table td:last-child {
+  width: 65px;
+}
+.information-status {
+  display: inline-block;
+  background: var(--soft);
+  padding: 5px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.information-empty {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+.information-empty h2 {
+  font:
+    400 24px var(--font-display),
+    Georgia,
+    serif;
+  color: var(--ink);
+  margin: 14px 0 8px;
+}
+.information-empty p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 10px;
+}
+.information-error {
+  border-left: 3px solid var(--danger);
+  padding: 20px;
+  background: var(--soft);
+  margin: 20px 0;
+}
+.information-error p {
+  margin: 0 0 12px;
+}
+.information-dialog {
+  margin: auto;
+  padding: 28px;
+  width: min(660px, calc(100% - 32px));
+  max-height: calc(100dvh - 40px);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.information-dialog::backdrop {
+  background: rgba(63, 31, 46, 0.45);
+}
+.information-dialog header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 20px;
+}
+.information-dialog h2 {
+  margin: 0;
+  font:
+    400 28px/1.2 var(--font-display),
+    Georgia,
+    serif;
+}
+.information-dialog dl {
+  margin: 0;
+}
+.information-dialog dl > div {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 18px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+}
+.information-dialog dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.information-dialog dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.record-id {
+  font-family: monospace;
+}
+@media (max-width: 780px) {
+  .workspace-sidebar {
+    flex-wrap: wrap;
+  }
+  .workspace-sidebar nav {
+    display: flex;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    gap: 6px;
+  }
+  .workspace-nav-link {
+    flex-shrink: 0;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .information-mode {
+    margin-top: 8px;
+  }
+  .information-toolbar .search-form {
+    flex: 1;
+  }
+  .information-shell .table-footer {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .information-dialog {
+    padding: 20px;
+  }
+  .information-dialog dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+}

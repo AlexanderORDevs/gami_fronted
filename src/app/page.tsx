@@ -1,5 +1,5 @@
-import { AuthPortal } from "./auth-portal";
+import { Catalog } from "./catalog";
 
 export default function Home() {
-  return <AuthPortal />;
+  return <Catalog />;
 }
