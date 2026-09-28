@@ -40,6 +40,48 @@ export function localizedApiError(
   status: number,
 ): string {
   const messages: Record<string, string> = {
+    "El stock cambio. Actualiza el inventario y vuelve a intentarlo.":
+      "El stock cambió. Actualiza el inventario y vuelve a intentarlo.",
+    "El stock no puede ser menor que las unidades reservadas.":
+      "El stock no puede ser menor que las unidades reservadas.",
+    "Stock disponible insuficiente. Actualiza las cantidades.":
+      "Stock disponible insuficiente. Actualiza las cantidades.",
+    "La tienda debe estar activa para registrar ordenes.":
+      "La tienda debe estar activa para registrar órdenes.",
+    "Una variante no esta publicada o no pertenece a esta tienda.":
+      "Una variante no está publicada o no pertenece a esta tienda.",
+    "La variante no pertenece a esta tienda.":
+      "La variante no pertenece a esta tienda.",
+    "La orden no pertenece exclusivamente a esta tienda.":
+      "La orden no pertenece exclusivamente a esta tienda.",
+    "Esta orden ya tiene un envio registrado.":
+      "Esta orden ya tiene un envío registrado.",
+    "El estado de la orden no permite crear un envio.":
+      "El estado de la orden no permite crear un envío.",
+    "La fecha de recojo debe ser futura.":
+      "La fecha de recojo debe ser futura.",
+    "El tipo de prenda no corresponde a la categoria.":
+      "El tipo de prenda no corresponde a la categoría.",
+    "El largo es obligatorio para esta categoria.":
+      "El largo es obligatorio para esta categoría.",
+    "Completa el precio y la cantidad minima por mayor.":
+      "Completa el precio y la cantidad mínima por mayor.",
+    "El precio por mayor no puede superar el precio unitario.":
+      "El precio por mayor no puede superar el precio unitario.",
+    "No se pueden repetir combinaciones de talla y color.":
+      "No se pueden repetir combinaciones de talla y color.",
+    "El color principal debe aparecer en una variante.":
+      "El color principal debe aparecer en una variante.",
+    "El distrito es obligatorio para Lima.":
+      "El distrito es obligatorio para Lima.",
+    "La agencia es obligatoria para este destino.":
+      "La agencia es obligatoria para este destino.",
+    "No se pueden repetir variantes en la orden.":
+      "No se pueden repetir variantes en la orden.",
+    "El importe total supera el limite permitido.":
+      "El importe total supera el límite permitido.",
+    "El registro ya existe. Actualiza la lista antes de intentarlo de nuevo.":
+      "El registro ya existe. Actualiza la lista antes de intentarlo de nuevo.",
     "You do not have permission for this store operation.":
       "No tienes permiso para realizar esta operación en esta tienda.",
     "The last active store administrator cannot be removed or demoted.":
@@ -87,7 +129,7 @@ export function localizedApiError(
   };
   if (message && messages[message]) return messages[message];
   if (status === 400)
-    return "Revisa los campos ingresados. La contraseña debe tener al menos 12 caracteres y los identificadores deben ser válidos.";
+    return "Revisa los campos obligatorios y el formato de los datos ingresados.";
   if (status === 401)
     return "La sesión o las credenciales no son válidas. Vuelve a iniciar sesión.";
   if (status === 403) return "No tienes permisos para realizar esta operación.";

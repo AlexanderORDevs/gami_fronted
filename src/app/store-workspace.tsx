@@ -32,6 +32,7 @@ import {
   type WorkspaceStore,
 } from "@/lib/store-api";
 import "./store-workspace.css";
+import { OperationToolbar } from "./store-operations";
 
 const MODULES: Partial<
   Record<AdminSection, { label: string; resources: StoreResource[] }>
@@ -123,27 +124,29 @@ export function StoreWorkspace({
           {store && <p>{STORE_ROLE_LABELS[store.role]}</p>}
         </div>
         <div className="store-workspace-picker">
-          <label>
-            <span>Tienda</span>
-            <select
-              value={selectedId}
-              disabled={loading || !stores.length}
-              onChange={(event) => {
-                const current = stores.find(
-                  (item) => item.id === event.target.value,
-                )!;
-                setSelectedId(current.id);
-                selection.current = current.id;
-                onStoreChange(current);
-              }}
-            >
-              {stores.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
+          {stores.length > 1 && (
+            <label>
+              <span>Tienda</span>
+              <select
+                value={selectedId}
+                disabled={loading || !stores.length}
+                onChange={(event) => {
+                  const current = stores.find(
+                    (item) => item.id === event.target.value,
+                  )!;
+                  setSelectedId(current.id);
+                  selection.current = current.id;
+                  onStoreChange(current);
+                }}
+              >
+                {stores.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             type="button"
             className="icon-button bordered"
@@ -188,6 +191,7 @@ function StoreContent({
   section: AdminSection;
   onAccessChanged: () => void;
 }>) {
+  const [revision, setRevision] = useState(0);
   if (section === "users")
     return (
       <StoreTeam
@@ -219,6 +223,12 @@ function StoreContent({
               )[resource]
             }
           </h2>
+          <OperationToolbar
+            token={accessToken}
+            store={store}
+            resource={resource}
+            onSaved={() => setRevision((current) => current + 1)}
+          />
           <InformationTable
             accessToken={accessToken}
             resource={
@@ -231,6 +241,7 @@ function StoreContent({
                 | "ledger"
             }
             storeId={store.id}
+            revision={revision}
           />
         </section>
       ))}

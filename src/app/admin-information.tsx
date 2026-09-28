@@ -29,7 +29,8 @@ import {
   type InformationRow,
 } from "@/lib/admin-api";
 import "./admin-information.css";
-import { getStoreInformation } from "@/lib/store-api";
+import { getStoreInformation, type WorkspaceStore } from "@/lib/store-api";
+import { OperationStoreSelect, OperationToolbar } from "./store-operations";
 
 export const ADMIN_SECTIONS = [
   { id: "users", label: "Usuarios y accesos", icon: Users },
@@ -286,7 +287,7 @@ const SECTION_RESOURCES: Record<InformationSection, InformationResource[]> = {
   stores: ["stores"],
   products: ["products"],
   orders: ["orders"],
-  warehouse: ["shipments"],
+  warehouse: ["inventory", "shipments"],
   finance: ["payouts", "ledger"],
   configuration: ["settings", "calendar", "shipping-rates"],
 };
@@ -710,6 +711,13 @@ export function AdminInformation({
 }: Readonly<{ accessToken: string; section: InformationSection }>) {
   const resources = SECTION_RESOURCES[section];
   const [resource, setResource] = useState(resources[0]);
+  const [selectedStore, setSelectedStore] = useState<WorkspaceStore | null>(
+    null,
+  );
+  const [revision, setRevision] = useState(0);
+  const operational = ["products", "orders", "inventory", "shipments"].includes(
+    resource,
+  );
   const label = ADMIN_SECTIONS.find((item) => item.id === section)!.label;
   return (
     <section
@@ -722,9 +730,11 @@ export function AdminInformation({
           <h1 id="information-title">{label}</h1>
           <p>{SECTION_DESCRIPTIONS[section]}</p>
         </div>
-        <span className="information-mode">
-          <Eye size={15} /> Solo consulta
-        </span>
+        {!operational && (
+          <span className="information-mode">
+            <Eye size={15} /> Solo consulta
+          </span>
+        )}
       </div>
       <nav className="information-tabs" aria-label={`Secciones de ${label}`}>
         {resources.map((item) => (
@@ -737,11 +747,33 @@ export function AdminInformation({
           </button>
         ))}
       </nav>
-      <InformationTable
-        key={`${resource}:${accessToken}`}
-        accessToken={accessToken}
-        resource={resource}
-      />
+      {operational && (
+        <>
+          <OperationStoreSelect
+            token={accessToken}
+            value={selectedStore?.id ?? ""}
+            onChange={setSelectedStore}
+          />
+          <OperationToolbar
+            key={`${resource}:${selectedStore?.id ?? ""}`}
+            token={accessToken}
+            store={selectedStore}
+            resource={resource}
+            onSaved={() => setRevision((current) => current + 1)}
+          />
+        </>
+      )}
+      {resource === "inventory" && !selectedStore ? (
+        <p>Sin tienda seleccionada.</p>
+      ) : (
+        <InformationTable
+          key={`${resource}:${selectedStore?.id ?? ""}:${accessToken}`}
+          accessToken={accessToken}
+          resource={resource}
+          storeId={operational ? selectedStore?.id : undefined}
+          revision={revision}
+        />
+      )}
     </section>
   );
 }

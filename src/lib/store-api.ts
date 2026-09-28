@@ -28,6 +28,38 @@ export type WorkspaceStore = {
   status: string;
   role: StoreRole;
   permissions: StoreResource[];
+  writePermissions: StoreOperation[];
+};
+export type StoreOperation = "products" | "orders" | "inventory" | "shipments";
+export type OperationOptions = {
+  types: Record<string, string[]>;
+  colors: string[];
+  genders: string[];
+  patterns: string[];
+  fits: string[];
+  lengths: string[];
+};
+export type OperationVariant = {
+  id: string;
+  sku: string;
+  productName: string;
+  sizeLabel: string;
+  color: string;
+  unitPriceInCents: number;
+  quantity: number | null;
+  available: number | null;
+};
+export type ShipmentOrderOption = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  shippingInCents: number;
+};
+export type OperationPage<T> = {
+  data: T[];
+  page: number;
+  pages: number;
+  total: number;
 };
 export type StoreMember = {
   userId: string;
@@ -57,6 +89,54 @@ export type StoreProfile = {
 
 const base = (storeId: string) =>
   `/store-workspace/stores/${encodeURIComponent(storeId)}`;
+
+export function getOperationOptions(
+  token: string,
+  storeId: string,
+  signal: AbortSignal,
+) {
+  return adminRequest<OperationOptions>(
+    token,
+    `${base(storeId)}/operation-options`,
+    { signal },
+  );
+}
+export function getOperationRecords<T>(
+  token: string,
+  storeId: string,
+  resource: "order-variants" | "inventory-variants" | "shipment-orders",
+  search: string,
+  page: number,
+  signal: AbortSignal,
+) {
+  const query = new URLSearchParams({ search, page: String(page) });
+  return adminRequest<OperationPage<T>>(
+    token,
+    `${base(storeId)}/${resource}?${query}`,
+    { signal, cache: "no-store" },
+  );
+}
+export function saveStoreOperation(
+  token: string,
+  storeId: string,
+  operation: StoreOperation,
+  input: object,
+  variantId?: string,
+) {
+  const suffix =
+    operation === "inventory"
+      ? `/inventory/${encodeURIComponent(variantId ?? "")}`
+      : `/${operation}`;
+  return adminRequest<{
+    id?: string;
+    orderNumber?: string;
+    status?: string;
+    quantity?: number;
+  }>(token, `${base(storeId)}${suffix}`, {
+    method: operation === "inventory" ? "PATCH" : "POST",
+    body: JSON.stringify(input),
+  });
+}
 export function listWorkspaceStores(token: string, signal?: AbortSignal) {
   return adminRequest<WorkspaceStore[]>(token, "/store-workspace/stores", {
     signal,
