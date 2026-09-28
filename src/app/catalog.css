@@ -193,6 +193,30 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 32px 22px;
 }
+.catalog-grid[data-compact="true"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 1120px;
+  margin-inline: auto;
+}
+.catalog-grid[data-compact="true"] .product-photo {
+  aspect-ratio: 1;
+}
+.product-options {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.product-reference {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  padding: 5px 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 10px;
+  pointer-events: none;
+}
 .product-card {
   min-width: 0;
 }
@@ -425,6 +449,80 @@
   min-width: 0;
   aspect-ratio: 4 / 5;
 }
+.detail-photo img {
+  object-fit: contain;
+}
+.detail-gallery {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.gallery-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.gallery-thumbnails {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 12px 12px;
+}
+.gallery-thumbnails button {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 80px;
+  padding: 2px;
+  border: 2px solid transparent;
+  background: var(--soft);
+  cursor: pointer;
+}
+.gallery-thumbnails button[aria-pressed="true"] {
+  border-color: var(--action);
+}
+.gallery-thumbnails img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.declared-options,
+.product-specifications {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  margin: 20px 0;
+}
+.product-specifications > div {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.product-specifications dt {
+  font-weight: 600;
+}
+.product-specifications dd {
+  margin: 0;
+}
+.declared-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 12px 0;
+}
+.declared-colors span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.declared-colors i {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
 .detail-information {
   padding: 48px 28px 28px;
   min-width: 0;
@@ -552,6 +650,7 @@
     font-size: 13px;
   }
   .catalog-grid,
+  .catalog-grid[data-compact="true"],
   .catalog-skeletons {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 24px 12px;

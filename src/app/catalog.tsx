@@ -86,7 +86,11 @@ function ProductPhoto({ product }: Readonly<{ product: CatalogProduct }>) {
   return product.imageUrl && !failed ? (
     <Image
       src={product.imageUrl}
-      alt={product.name}
+      alt={
+        product.imageIsReference
+          ? `Imagen referencial de ${product.name}`
+          : product.name
+      }
       width={600}
       height={750}
       unoptimized
@@ -111,6 +115,18 @@ function ProductCard({
   onOpen: () => void;
   onSave: () => void;
 }>) {
+  const sizes = product.variants.length
+    ? [...new Set(product.variants.map((variant) => variant.size))]
+    : (product.declaredSizes ?? []);
+  const colors = product.variants.length
+    ? [...new Set(product.variants.map((variant) => variant.color))]
+    : (product.declaredColors ?? []).map((color) => color.name);
+  const stockKnown = product.stockKnown ?? product.variants.length > 0;
+  const stockStatus = product.variants.some(
+    (variant) => variant.availableStock > 0,
+  )
+    ? "Con stock"
+    : "Agotado";
   return (
     <article className="product-card">
       <div className="product-photo">
@@ -121,6 +137,9 @@ function ProductCard({
         >
           <ProductPhoto product={product} />
         </button>
+        {product.imageIsReference && (
+          <span className="product-reference">Imagen referencial</span>
+        )}
         <button
           className="product-save"
           onClick={onSave}
@@ -139,13 +158,14 @@ function ProductCard({
       <h3>
         <button onClick={onOpen}>{product.name}</button>
       </h3>
+      <p className="product-options">
+        {sizes.length} {sizes.length === 1 ? "talla" : "tallas"}
+        {" · "}
+        {colors.length} {colors.length === 1 ? "color" : "colores"}
+      </p>
       <div className="product-meta">
         <strong>{formatPrice(product.unitPriceInCents)}</strong>
-        <span>
-          {product.variants.some((variant) => variant.availableStock > 0)
-            ? "Con stock"
-            : "Agotado"}
-        </span>
+        <span>{stockKnown ? stockStatus : "Stock por confirmar"}</span>
       </div>
     </article>
   );
@@ -164,6 +184,70 @@ function CatalogTitle({
     </>
   );
 }
+
+function ProductGallery({ product }: Readonly<{ product: CatalogProduct }>) {
+  const coverImages = product.imageUrl ? [product.imageUrl] : [];
+  const images = product.imageUrls?.length ? product.imageUrls : coverImages;
+  const [selected, setSelected] = useState(0);
+  return (
+    <fieldset className="detail-gallery" aria-label="Fotos del producto">
+      <div className="detail-photo">
+        <ProductPhoto
+          key={images[selected] ?? product.id}
+          product={{ ...product, imageUrl: images[selected] ?? null }}
+        />
+      </div>
+      {images.length > 1 && (
+        <>
+          <div className="gallery-controls">
+            <button
+              className="icon-button bordered"
+              aria-label="Foto anterior"
+              title="Foto anterior"
+              disabled={selected === 0}
+              onClick={() => setSelected(selected - 1)}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <output aria-live="polite">
+              {selected + 1} / {images.length}
+            </output>
+            <button
+              className="icon-button bordered"
+              aria-label="Foto siguiente"
+              title="Foto siguiente"
+              disabled={selected === images.length - 1}
+              onClick={() => setSelected(selected + 1)}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          <div className="gallery-thumbnails">
+            {images.map((url, index) => (
+              <button
+                key={url}
+                type="button"
+                aria-label={`Ver foto ${index + 1}`}
+                title={`Foto ${index + 1}`}
+                aria-pressed={selected === index}
+                onClick={() => setSelected(index)}
+              >
+                <Image src={url} alt="" width={64} height={80} unoptimized />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </fieldset>
+  );
+}
+
+const specificationLabels: Record<string, string> = {
+  material: "Material",
+  fit: "Corte",
+  details: "Detalles",
+  care: "Cuidados",
+};
 
 function ProductDetail({
   id,
@@ -201,6 +285,9 @@ function ProductDetail({
     };
   }, [id]);
   const variant = product?.variants.find((item) => item.id === variantId);
+  const variantStock = variant
+    ? `${variant.availableStock} unidades disponibles`
+    : "Selecciona talla y color para consultar el stock.";
   return (
     <dialog
       ref={dialog}
@@ -230,12 +317,15 @@ function ProductDetail({
       )}
       {!error && product && (
         <div className="product-detail-grid">
-          <div className="detail-photo">
-            <ProductPhoto product={product} />
-          </div>
+          <ProductGallery product={product} />
           <div className="detail-information">
             <p className="eyebrow">{product.store.displayName}</p>
             <h2 id="product-title">{product.name}</h2>
+            {product.imageIsReference && (
+              <p className="product-options">
+                Imagen referencial; no corresponde al producto real.
+              </p>
+            )}
             <p className="detail-price">
               {formatPrice(product.unitPriceInCents)}
             </p>
@@ -249,27 +339,71 @@ function ProductDetail({
             <p className="product-description">
               {product.description ?? "Sin descripción adicional."}
             </p>
-            <label className="field" htmlFor="product-variant">
-              <span>Talla y color</span>
-              <select
-                id="product-variant"
-                value={variantId}
-                onChange={(event) => setVariantId(event.target.value)}
-              >
-                <option value="">Selecciona una variante</option>
-                {product.variants.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.size} · {item.color}
-                    {item.availableStock === 0 ? " · Agotado" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <output className="stock-label">
-              {variant
-                ? `${variant.availableStock} unidades disponibles`
-                : "Selecciona talla y color para consultar el stock."}
-            </output>
+            {Object.keys(product.specifications ?? {}).length > 0 && (
+              <dl className="product-specifications">
+                {Object.entries(product.specifications ?? {}).map(
+                  ([key, value]) => (
+                    <div key={key}>
+                      <dt>{specificationLabels[key] ?? key}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ),
+                )}
+              </dl>
+            )}
+            {product.variants.length > 0 ? (
+              <>
+                <label className="field" htmlFor="product-variant">
+                  <span>Talla y color</span>
+                  <select
+                    id="product-variant"
+                    value={variantId}
+                    onChange={(event) => setVariantId(event.target.value)}
+                  >
+                    <option value="">Selecciona una variante</option>
+                    {product.variants.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.size} · {item.color}
+                        {item.availableStock === 0 ? " · Agotado" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <output className="stock-label">
+                  {product.stockKnown === false
+                    ? "Stock por confirmar"
+                    : variantStock}
+                </output>
+              </>
+            ) : (
+              <div className="declared-options">
+                {!!product.declaredSizes?.length && (
+                  <p>
+                    <strong>Tallas declaradas:</strong>{" "}
+                    {product.declaredSizes.join(" / ")}
+                  </p>
+                )}
+                {!!product.declaredColors?.length && (
+                  <div
+                    className="declared-colors"
+                    aria-label="Colores declarados"
+                  >
+                    {product.declaredColors.map((color) => (
+                      <span key={color.name}>
+                        {color.hex && (
+                          <i
+                            aria-hidden="true"
+                            style={{ backgroundColor: color.hex }}
+                          />
+                        )}
+                        {color.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <output className="stock-label">Stock por confirmar</output>
+              </div>
+            )}
             {variant?.stockUpdatedAt && (
               <p className="stock-date">
                 Actualizado el{" "}
@@ -623,7 +757,10 @@ export function Catalog() {
                   <output className="catalog-result-count">
                     {result.total} {result.total === 1 ? "prenda" : "prendas"}
                   </output>
-                  <div className="catalog-grid">
+                  <div
+                    className="catalog-grid"
+                    data-compact={result.data.length <= 6}
+                  >
                     {result.data.map((product) => (
                       <ProductCard
                         key={product.id}

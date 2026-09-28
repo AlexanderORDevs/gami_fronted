@@ -15,6 +15,12 @@ export type CatalogProduct = {
   wholesalePriceInCents: number | null;
   wholesaleMinimum: number | null;
   imageUrl: string | null;
+  imageIsReference?: boolean;
+  imageUrls?: string[];
+  stockKnown?: boolean;
+  declaredSizes?: string[];
+  declaredColors?: { name: string; hex: string | null }[];
+  specifications?: Record<string, string>;
   store: { id: string; displayName: string };
   variants: CatalogVariant[];
 };
