@@ -909,6 +909,43 @@ form {
 .admin-modal > form {
   padding: 24px;
 }
+.store-picker {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.store-picker select,
+.admin-modal select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+}
+.store-picker-pagination,
+.store-picker-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.store-picker-pagination {
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+}
+.admin-modal [role="alert"] {
+  color: var(--danger);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
 .admin-modal textarea {
   min-height: 100px;
   resize: vertical;

@@ -40,6 +40,14 @@ export function localizedApiError(
   status: number,
 ): string {
   const messages: Record<string, string> = {
+    "You do not have permission for this store operation.":
+      "No tienes permiso para realizar esta operación en esta tienda.",
+    "The last active store administrator cannot be removed or demoted.":
+      "La tienda debe conservar al menos un administrador activo.",
+    "Store member was not found.":
+      "No se encontró ese integrante en esta tienda.",
+    "A store is required for a store role.":
+      "Selecciona una tienda para asignar este rol.",
     "La hora de cierre debe ser posterior a la apertura.":
       "La hora de cierre debe ser posterior a la apertura.",
     "Los turnos del mismo día no pueden superponerse.":

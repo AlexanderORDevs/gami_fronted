@@ -1,4 +1,5 @@
 import { ApiError, localizedApiError } from "./auth-api";
+import type { StoreRole } from "./store-api";
 
 export type UserStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
 
@@ -15,6 +16,7 @@ export type StoreMembership = {
   storeName: string;
   isOwner: boolean;
   active: boolean;
+  role: StoreRole;
 };
 
 export type AdminUser = {
@@ -65,13 +67,16 @@ export type CreateUserInput = {
   displayName: string;
   email: string;
   phone?: string;
+  storeId?: string;
+  isOwner?: boolean;
+  storeRole?: StoreRole;
 };
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
   "http://localhost:4000/api";
 
-async function adminRequest<T>(
+export async function adminRequest<T>(
   accessToken: string,
   path: string,
   init: RequestInit = {},
@@ -180,6 +185,7 @@ export function getStoreAudit(accessToken: string, id: string) {
 }
 
 export type InformationResource =
+  | "inventory"
   | "stores"
   | "products"
   | "orders"
@@ -287,10 +293,11 @@ export function grantStore(
   storeId: string,
   isOwner: boolean,
   reason: string,
+  storeRole?: StoreRole,
 ) {
   return adminRequest<AdminUser>(accessToken, `/admin/users/${userId}/stores`, {
     method: "POST",
-    body: JSON.stringify({ storeId, isOwner, reason }),
+    body: JSON.stringify({ storeId, isOwner, reason, storeRole }),
   });
 }
 

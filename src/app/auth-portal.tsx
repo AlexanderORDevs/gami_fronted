@@ -7,10 +7,7 @@ import {
   EyeOff,
   KeyRound,
   LogOut,
-  LayoutDashboard,
   ShieldCheck,
-  Store,
-  Users,
 } from "lucide-react";
 import { type ReactNode, SyntheticEvent, useEffect, useState } from "react";
 import Image from "next/image";
@@ -30,6 +27,8 @@ import {
 } from "@/lib/auth-api";
 import { AdminPanel } from "./admin-panel";
 import { StoreManagement } from "./store-management";
+import { StoreWorkspace, storeSections } from "./store-workspace";
+import type { WorkspaceStore, StoreResource } from "@/lib/store-api";
 import {
   ADMIN_SECTIONS,
   AdminInformation,
@@ -69,6 +68,7 @@ function WorkspaceFrame({
   onPasswordChange,
   onLogout,
   children,
+  storePermissions = [],
 }: Readonly<{
   session: AuthSession;
   section: AdminSection;
@@ -76,12 +76,14 @@ function WorkspaceFrame({
   onPasswordChange: () => void;
   onLogout: () => Promise<void>;
   children: ReactNode;
+  storePermissions?: StoreResource[];
 }>) {
   const isAdmin = session.user.roles.includes("SUPER_ADMIN");
   const workspaceName = isAdmin ? "Administración" : "Mi tienda";
-  const sectionLabel = ADMIN_SECTIONS.find(
-    (item) => item.id === section,
-  )!.label;
+  const navigation = isAdmin ? ADMIN_SECTIONS : storeSections(storePermissions);
+  const currentSection =
+    navigation.find((item) => item.id === section) ?? navigation[0];
+  const sectionLabel = currentSection?.label ?? "Mi tienda";
   return (
     <div className="workspace">
       <aside className="workspace-sidebar" aria-label="Navegación del portal">
@@ -91,27 +93,17 @@ function WorkspaceFrame({
         </div>
         <p className="sidebar-label">Portal</p>
         <nav aria-label="Navegación principal">
-          {isAdmin ? (
-            ADMIN_SECTIONS.map((item) => (
-              <a
-                key={item.id}
-                className="workspace-nav-link"
-                href={`#${item.id}`}
-                aria-current={section === item.id ? "page" : undefined}
-              >
-                <item.icon size={18} />
-                {item.label}
-              </a>
-            ))
-          ) : (
+          {navigation.map((item) => (
             <a
+              key={item.id}
               className="workspace-nav-link"
-              href="#workspace-main"
-              aria-current="page"
+              href={`#${item.id}`}
+              aria-current={currentSection?.id === item.id ? "page" : undefined}
             >
-              <LayoutDashboard size={18} /> Resumen
+              <item.icon size={18} />
+              {item.label}
             </a>
-          )}
+          ))}
         </nav>
         <div className="sidebar-footer">
           <ShieldCheck size={16} /> Operaciones Gami
@@ -122,7 +114,7 @@ function WorkspaceFrame({
           <div className="workspace-breadcrumb">
             <span>{workspaceName}</span>
             <span aria-hidden="true">/</span>
-            <strong>{isAdmin ? sectionLabel : "Resumen"}</strong>
+            <strong>{sectionLabel}</strong>
           </div>
           <div className="profile">
             <span className="profile-avatar" aria-hidden="true">
@@ -414,6 +406,7 @@ export function AuthPortal() {
   const [pending, setPending] = useState(false);
   const [publicView, setPublicView] = useState<PublicView>("login");
   const [voluntaryChange, setVoluntaryChange] = useState(false);
+  const [activeStore, setActiveStore] = useState<WorkspaceStore | null>(null);
   const useSuggestion = useSuggestedPassword(setNewPassword, setConfirmation);
 
   const passwordActions = usePasswordActions({
@@ -620,6 +613,7 @@ export function AuthPortal() {
         pending={pending}
         onPasswordChange={() => setVoluntaryChange(true)}
         onLogout={handleLogout}
+        storePermissions={activeStore?.permissions}
       >
         {canAdministerUsers ? (
           <AdministrativeContent
@@ -627,32 +621,12 @@ export function AuthPortal() {
             section={section}
           />
         ) : (
-          <section className="workspace-content">
-            <p className="eyebrow">Portal de operaciones</p>
-            <h1>Hola, {session.user.displayName.split(" ")[0]}.</h1>
-            <p className="supporting-copy">
-              Tu sesión está activa. Los módulos de tu tienda estarán
-              disponibles próximamente.
-            </p>
-            <div className="module-grid">
-              <article>
-                <Users size={22} />
-                <div>
-                  <h2>Usuarios y accesos</h2>
-                  <p>La administración gestiona los permisos de tu cuenta.</p>
-                </div>
-                <span>Acceso restringido</span>
-              </article>
-              <article>
-                <Store size={22} />
-                <div>
-                  <h2>Tiendas</h2>
-                  <p>La gestión de prendas y operaciones está pendiente.</p>
-                </div>
-                <span className="muted-status">Próximamente</span>
-              </article>
-            </div>
-          </section>
+          <StoreWorkspace
+            key={session.user.id}
+            accessToken={session.tokens.accessToken}
+            section={section}
+            onStoreChange={setActiveStore}
+          />
         )}
       </WorkspaceFrame>
     );

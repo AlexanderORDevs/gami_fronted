@@ -11,6 +11,7 @@ import {
   Shield,
   Store,
   UserRound,
+  UserCog,
   X,
 } from "lucide-react";
 import { SyntheticEvent, useEffect, useState } from "react";
@@ -18,10 +19,13 @@ import {
   AdminUser,
   AuditEntry,
   CreateUserInput,
+  InformationPage,
+  InformationRow,
   Role,
   UserList,
   UserStatus,
   createUser,
+  getAdminInformation,
   getUserAudit,
   grantRole,
   grantStore,
@@ -33,12 +37,19 @@ import {
   revokeStore,
   updateUserStatus,
 } from "@/lib/admin-api";
+import { STORE_ROLE_LABELS, type StoreRole } from "@/lib/store-api";
 
 type Action =
   | { kind: "status"; status: UserStatus }
   | { kind: "grant-role"; roleCode: string }
   | { kind: "revoke-role"; roleCode: string }
-  | { kind: "grant-store"; storeId: string; isOwner: boolean }
+  | {
+      kind: "grant-store";
+      storeId: string;
+      isOwner: boolean;
+      storeRole?: StoreRole;
+      storeName?: string;
+    }
   | { kind: "revoke-store"; storeId: string }
   | { kind: "reset-password" }
   | { kind: "revoke-sessions" };
@@ -111,6 +122,7 @@ const AUDIT_LABELS: Record<string, string> = {
   USER_ROLE_REVOKED: "Rol retirado",
   USER_STORE_ACCESS_GRANTED: "Acceso a tienda asignado",
   USER_STORE_ACCESS_REVOKED: "Acceso a tienda retirado",
+  USER_STORE_ROLE_CHANGED: "Rol de tienda actualizado",
   USER_PASSWORD_RESET: "Contraseña restablecida",
   USER_SESSIONS_REVOKED: "Sesiones cerradas",
   AUTH_LOGIN_SUCCEEDED: "Inicio de sesión",
@@ -126,6 +138,158 @@ function StatusBadge({ status }: Readonly<{ status: UserStatus }>) {
     <span className={`status-badge status-${status.toLowerCase()}`}>
       {STATUS_LABELS[status]}
     </span>
+  );
+}
+
+function StorePicker({
+  accessToken,
+  value,
+  onChange,
+  disabled,
+  required = false,
+  selectedLabel,
+}: Readonly<{
+  accessToken: string;
+  value: string;
+  onChange: (storeId: string) => void;
+  disabled: boolean;
+  required?: boolean;
+  selectedLabel?: string;
+}>) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<InformationPage>({
+    data: [],
+    total: 0,
+    page: 1,
+    pages: 0,
+  });
+  const [selected, setSelected] = useState<InformationRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getAdminInformation(accessToken, "stores", page, search, controller.signal)
+      .then((response) => {
+        if (!controller.signal.aborted) setResult(response);
+      })
+      .catch((error_: unknown) => {
+        if (!controller.signal.aborted) setError(messageFrom(error_));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [accessToken, page, search, retry]);
+
+  function changePage(next: number) {
+    setLoading(true);
+    setError("");
+    setPage(next);
+  }
+
+  return (
+    <fieldset className="store-picker" aria-label="Asignación de tienda">
+      <label className="field">
+        <span>Buscar tienda</span>
+        <span className="input-shell">
+          <Search size={16} aria-hidden="true" />
+          <input
+            value={search}
+            maxLength={120}
+            disabled={disabled}
+            onChange={(event) => {
+              setLoading(true);
+              setError("");
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
+        </span>
+      </label>
+      <label className="field">
+        <span>{required ? "Tienda" : "Tienda (opcional)"}</span>
+        <select
+          value={value}
+          required={required}
+          disabled={disabled || loading || Boolean(error)}
+          onChange={(event) => {
+            const storeId = event.target.value;
+            setSelected(
+              result.data.find((store) => store.id === storeId) ?? null,
+            );
+            onChange(storeId);
+          }}
+        >
+          <option value="">
+            {required ? "Selecciona una tienda" : "Sin tienda"}
+          </option>
+          {value && !result.data.some((store) => store.id === value) && (
+            <option value={value}>
+              {String(
+                selected?.displayName ?? selectedLabel ?? "Tienda seleccionada",
+              )}
+            </option>
+          )}
+          {result.data.map((store) => (
+            <option key={store.id} value={store.id}>
+              {String(store.displayName)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="store-picker-pagination">
+        <output>
+          {loading ? "Cargando tiendas..." : `${result.total} tiendas`}
+        </output>
+        <div>
+          <button
+            type="button"
+            className="icon-button bordered"
+            title="Tiendas anteriores"
+            aria-label="Tiendas anteriores"
+            disabled={disabled || loading || page <= 1}
+            onClick={() => changePage(page - 1)}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span>
+            {page} / {Math.max(1, result.pages)}
+          </span>
+          <button
+            type="button"
+            className="icon-button bordered"
+            title="Tiendas siguientes"
+            aria-label="Tiendas siguientes"
+            disabled={disabled || loading || page >= result.pages}
+            onClick={() => changePage(page + 1)}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div role="alert">
+          {error}{" "}
+          <button
+            type="button"
+            className="icon-button bordered"
+            title="Reintentar carga de tiendas"
+            aria-label="Reintentar carga de tiendas"
+            disabled={disabled}
+            onClick={() => {
+              setError("");
+              setLoading(true);
+              setRetry((current) => current + 1);
+            }}
+          >
+            <RefreshCw size={16} />
+          </button>
+        </div>
+      )}
+    </fieldset>
   );
 }
 
@@ -210,9 +374,13 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
     setPending(true);
     setError("");
     try {
-      const input = Object.fromEntries(
-        Object.entries(newUser).filter(([, value]) => value?.trim()),
-      ) as CreateUserInput;
+      const input: CreateUserInput = {
+        ...newUser,
+        phone: newUser.phone?.trim() || undefined,
+        storeId: newUser.storeId || undefined,
+        isOwner: newUser.storeId ? (newUser.isOwner ?? false) : undefined,
+        storeRole: newUser.storeId ? newUser.storeRole : undefined,
+      };
       const result = await createUser(accessToken, input);
       setTemporaryPassword(result.temporaryPassword);
       setCreateOpen(false);
@@ -261,6 +429,8 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
           action.storeId,
           action.isOwner,
           reason,
+          action.storeRole ??
+            (action.isOwner ? "STORE_ADMIN" : "STORE_OPERATOR"),
         );
       if (action.kind === "revoke-store")
         updated = await revokeStore(
@@ -557,7 +727,26 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                       <span>
                         {membership.storeName}
                         {membership.isOwner ? " · Propietario" : ""}
+                        {" · "}
+                        {STORE_ROLE_LABELS[membership.role] ??
+                          "Operador de tienda"}
                       </span>
+                      <button
+                        type="button"
+                        title={`Editar rol en ${membership.storeName}`}
+                        aria-label={`Editar rol en ${membership.storeName}`}
+                        onClick={() =>
+                          setAction({
+                            kind: "grant-store",
+                            storeId: membership.storeId,
+                            storeName: membership.storeName,
+                            isOwner: membership.isOwner,
+                            storeRole: membership.role,
+                          })
+                        }
+                      >
+                        <UserCog size={16} />
+                      </button>
                       <button
                         onClick={() =>
                           setAction({
@@ -614,6 +803,7 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                 className="icon-button"
                 type="button"
                 onClick={() => setCreateOpen(false)}
+                disabled={pending}
                 aria-label="Cerrar"
               >
                 <X />
@@ -649,12 +839,67 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                   </label>
                 ),
               )}
+              <StorePicker
+                accessToken={accessToken}
+                value={newUser.storeId ?? ""}
+                disabled={pending}
+                onChange={(storeId) =>
+                  setNewUser((current) => ({
+                    ...current,
+                    storeId,
+                    isOwner: false,
+                    storeRole: undefined,
+                  }))
+                }
+              />
+              {newUser.storeId && (
+                <label className="field">
+                  <span>Rol en esta tienda</span>
+                  <select
+                    value={
+                      newUser.storeRole ??
+                      (newUser.isOwner ? "STORE_ADMIN" : "STORE_OPERATOR")
+                    }
+                    disabled={pending}
+                    onChange={(event) =>
+                      setNewUser((current) => ({
+                        ...current,
+                        storeRole: event.target.value as StoreRole,
+                      }))
+                    }
+                  >
+                    {Object.entries(STORE_ROLE_LABELS).map(([value, label]) => (
+                      <option value={value} key={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {newUser.storeId && (
+                <label className="check-field">
+                  <input
+                    type="checkbox"
+                    checked={newUser.isOwner ?? false}
+                    disabled={pending}
+                    onChange={(event) =>
+                      setNewUser((current) => ({
+                        ...current,
+                        isOwner: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Propietario de tienda</span>
+                </label>
+              )}
+              {error && <p role="alert">{error}</p>}
               <button
                 className="primary-button"
                 type="submit"
                 disabled={pending}
               >
-                Crear usuario
+                <CirclePlus size={18} />{" "}
+                {pending ? "Creando..." : "Crear usuario"}
               </button>
             </form>
           </div>
@@ -681,17 +926,44 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
             <form onSubmit={handleAction}>
               {action.kind === "grant-store" && (
                 <>
+                  <StorePicker
+                    accessToken={accessToken}
+                    value={action.storeId}
+                    selectedLabel={action.storeName}
+                    disabled={pending}
+                    required
+                    onChange={(storeId) =>
+                      setAction({
+                        ...action,
+                        storeId,
+                        isOwner: false,
+                        storeRole: undefined,
+                      })
+                    }
+                  />
                   <label className="field">
-                    <span>Identificador de tienda (UUID)</span>
-                    <span className="input-shell">
-                      <input
-                        required
-                        value={action.storeId}
-                        onChange={(event) =>
-                          setAction({ ...action, storeId: event.target.value })
-                        }
-                      />
-                    </span>
+                    <span>Rol en esta tienda</span>
+                    <select
+                      value={
+                        action.storeRole ??
+                        (action.isOwner ? "STORE_ADMIN" : "STORE_OPERATOR")
+                      }
+                      disabled={pending}
+                      onChange={(event) =>
+                        setAction({
+                          ...action,
+                          storeRole: event.target.value as StoreRole,
+                        })
+                      }
+                    >
+                      {Object.entries(STORE_ROLE_LABELS).map(
+                        ([value, label]) => (
+                          <option value={value} key={value}>
+                            {label}
+                          </option>
+                        ),
+                      )}
+                    </select>
                   </label>
                   <label className="check-field">
                     <input
@@ -703,10 +975,6 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                     />{" "}
                     Propietario de tienda
                   </label>
-                  <p className="dependency-note">
-                    El selector de tiendas está pendiente. Ingresa el UUID de
-                    una tienda existente.
-                  </p>
                 </>
               )}
               <label className="field">
@@ -720,10 +988,13 @@ export function AdminPanel({ accessToken }: Readonly<{ accessToken: string }>) {
                   placeholder="Indica el motivo de este cambio."
                 />
               </label>
+              {error && <p role="alert">{error}</p>}
               <button
                 className="primary-button"
                 type="submit"
-                disabled={pending}
+                disabled={
+                  pending || (action.kind === "grant-store" && !action.storeId)
+                }
               >
                 {pending ? "Aplicando..." : "Confirmar acción"}
               </button>

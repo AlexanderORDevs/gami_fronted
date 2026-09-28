@@ -29,6 +29,7 @@ import {
   type InformationRow,
 } from "@/lib/admin-api";
 import "./admin-information.css";
+import { getStoreInformation } from "@/lib/store-api";
 
 export const ADMIN_SECTIONS = [
   { id: "users", label: "Usuarios y accesos", icon: Users },
@@ -83,6 +84,18 @@ const amount: Column = {
 };
 
 const RESOURCES: Record<InformationResource, ResourceDefinition> = {
+  inventory: {
+    label: "Inventario",
+    searchLabel: "Buscar prenda o SKU",
+    columns: [
+      { key: "productName", label: "Prenda" },
+      { key: "sku", label: "SKU" },
+      { key: "sizeLabel", label: "Talla" },
+      { key: "color", label: "Color" },
+      { key: "quantity", label: "Stock" },
+      { key: "stockUpdatedAt", label: "Actualización", format: "date" },
+    ],
+  },
   stores: {
     label: "Tiendas",
     searchLabel: "Buscar por nombre de tienda",
@@ -428,13 +441,51 @@ export function InformationTable({
   resource,
   onOpen,
   revision = 0,
+  storeId,
 }: Readonly<{
   accessToken: string;
   resource: InformationResource;
   onOpen?: (id: string) => void;
   revision?: number;
+  storeId?: string;
 }>) {
-  const definition = RESOURCES[resource];
+  const definition =
+    storeId && resource === "orders"
+      ? {
+          label: "Atención y órdenes",
+          searchLabel: "Buscar por número de orden",
+          columns: [
+            { key: "orderNumber", label: "Orden" },
+            status,
+            {
+              key: "subtotalInCents",
+              label: "Importe de tu tienda",
+              format: "money" as const,
+            },
+            {
+              key: "confirmationDueAt",
+              label: "Plazo de atención",
+              format: "date" as const,
+            },
+            { key: "items", label: "Prendas", detailOnly: true },
+            created,
+          ],
+        }
+      : RESOURCES[resource];
+  const detailDefinition =
+    storeId && resource === "products"
+      ? {
+          ...definition,
+          columns: [
+            ...definition.columns,
+            {
+              key: "variantSummary",
+              label: "Tallas, colores y stock",
+              detailOnly: true,
+            },
+          ],
+        }
+      : definition;
   const columns = definition.columns.filter((column) => !column.detailOnly);
   const [query, setQuery] = useState({ page: 1, search: "" });
   const [input, setInput] = useState("");
@@ -449,13 +500,22 @@ export function InformationTable({
       setLoading(true);
       setError("");
       try {
-        const data = await getAdminInformation(
-          accessToken,
-          resource,
-          query.page,
-          query.search,
-          controller.signal,
-        );
+        const data = storeId
+          ? await getStoreInformation(
+              accessToken,
+              storeId,
+              resource,
+              query.page,
+              query.search,
+              controller.signal,
+            )
+          : await getAdminInformation(
+              accessToken,
+              resource,
+              query.page,
+              query.search,
+              controller.signal,
+            );
         if (!controller.signal.aborted) setResult(data);
       } catch (error_: unknown) {
         if (!controller.signal.aborted) {
@@ -472,7 +532,7 @@ export function InformationTable({
     }
     void load();
     return () => controller.abort();
-  }, [accessToken, resource, query, retry, revision]);
+  }, [accessToken, resource, query, retry, revision, storeId]);
   function search(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setQuery({ page: 1, search: input.trim() });
@@ -636,7 +696,7 @@ export function InformationTable({
       {selected && (
         <RecordDetail
           row={selected}
-          definition={definition}
+          definition={detailDefinition}
           onClose={() => setSelected(null)}
         />
       )}

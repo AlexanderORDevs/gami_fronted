@@ -1,0 +1,96 @@
+.store-workspace-heading,
+.store-workspace-picker,
+.store-team-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.store-workspace-heading {
+  margin-bottom: 24px;
+}
+.store-workspace h1 {
+  margin: 0;
+  font-size: 28px;
+  overflow-wrap: anywhere;
+}
+.store-workspace h2 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+.store-workspace-heading p {
+  margin: 6px 0;
+}
+.store-workspace-picker label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.store-workspace select,
+.store-team-dialog select {
+  min-height: 42px;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+}
+.store-workspace-picker {
+  max-width: 100%;
+}
+.store-workspace-picker label {
+  min-width: 0;
+  flex: 1;
+}
+.store-workspace-resource + .store-workspace-resource {
+  margin-top: 32px;
+}
+.store-workspace-profile {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 24px;
+}
+.store-workspace-profile dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.store-workspace-profile dd {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.store-workspace [role="alert"] {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+.store-team-heading .primary-button {
+  width: auto;
+}
+.store-team-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  max-width: calc(100vw - 32px);
+}
+.store-team-dialog::backdrop {
+  background: rgba(63, 31, 46, 0.38);
+  backdrop-filter: blur(2px);
+}
+.store-dialog-content {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+}
+.store-temporary-password {
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.store-team-dialog [role="alert"] {
+  margin: 0;
+}
