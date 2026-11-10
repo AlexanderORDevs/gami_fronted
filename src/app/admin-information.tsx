@@ -33,6 +33,7 @@ import { getStoreInformation, type WorkspaceStore } from "@/lib/store-api";
 import { OrderDetailDialog } from "./order-detail";
 import { PayoutRegistration } from "./payout-registration";
 import { LogisticsConfiguration } from "./logistics-configuration";
+import { CommissionConfiguration } from "./commission-configuration";
 import { OperationStoreSelect, OperationToolbar } from "./store-operations";
 
 export const ADMIN_SECTIONS = [
@@ -302,7 +303,7 @@ const SECTION_DESCRIPTIONS: Record<InformationSection, string> = {
   orders: "Órdenes registradas y fechas de entrega previstas.",
   warehouse: "Envíos, recojos y seguimiento logístico.",
   finance: "Liquidaciones registradas y movimientos contables.",
-  configuration: "Parámetros operativos, calendario y tarifas vigentes.",
+  configuration: "Comisión aprobada, parámetros operativos y tarifas vigentes.",
 };
 const LABELS: Record<string, string> = {
   APPLIED: "Solicitud recibida",
@@ -351,12 +352,18 @@ const LABELS: Record<string, string> = {
   active_strike_limit: "Límite de sanciones activas",
   strike_expiration_days: "Vigencia de sanción (días)",
   appeal_window_days: "Plazo de apelación (días)",
+  commission_rate_basis_points_agency: "Comisión AGENCY (puntos básicos)",
 };
 
 function formatValue(row: InformationRow, column: Column): string {
   const value = row[column.key];
   if (value === null || value === undefined || value === "")
     return "Sin registrar";
+  if (
+    column.key === "value" &&
+    row.key === "commission_rate_basis_points_agency"
+  )
+    return `${(Number(value) / 100).toLocaleString("es-PE", { maximumFractionDigits: 2 })}%`;
   if (column.format === "money")
     return new Intl.NumberFormat("es-PE", {
       style: "currency",
@@ -738,7 +745,12 @@ export function AdminInformation({
     resource,
   );
   const logisticsEditable = ["calendar", "shipping-rates"].includes(resource);
-  const readOnly = !operational && resource !== "payouts" && !logisticsEditable;
+  const financialConfigurationEditable = resource === "settings";
+  const readOnly =
+    !operational &&
+    resource !== "payouts" &&
+    !logisticsEditable &&
+    !financialConfigurationEditable;
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const label = ADMIN_SECTIONS.find((item) => item.id === section)!.label;
   return (
@@ -804,6 +816,13 @@ export function AdminInformation({
         <LogisticsConfiguration
           accessToken={accessToken}
           resource={resource as "calendar" | "shipping-rates"}
+          onSaved={() => setRevision((current) => current + 1)}
+        />
+      )}
+      {resource === "settings" && (
+        <CommissionConfiguration
+          accessToken={accessToken}
+          revision={revision}
           onSaved={() => setRevision((current) => current + 1)}
         />
       )}

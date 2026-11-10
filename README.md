@@ -12,15 +12,23 @@ The roadmap remains authoritative for scope and permissions: customer storefront
 
 ## Public catalog
 
+- The customer journey guide is available at `/como-funciona`, linked from the main catalog navigation and the home introduction. It explains the current order, payment, confirmation, shipping, and support boundaries without interrupting product browsing.
+
 - Anonymous browsing, text search, category/brand filters, and pagination (24 products per page). Confirmed positive net stock always comes first, before global pagination; newest/price sorting applies within available and unavailable groups. Saved products follow the same stock-first priority while retaining save order inside each group.
 - Product detail at `/?producto=<uuid>`, with description, prices in PEN, variants and available stock. The dialog supports keyboard dismissal and direct links.
 - Visitors can browse without an account. Saving a favorite, keeping a cart and creating an order requires the customer account available from "Mi cuenta". Favorites (max 100) and variant quantities (max 50) are stored per Customer in PostgreSQL, not shared browser-local lists. Unpublished/deleted saved products disappear from the saved view. Old anonymous local favorites/cart data is not automatically assigned to any account.
-- Public API: `GET /api/catalog/products`, `GET /api/catalog/products/:id`, `GET /api/catalog/filters`. List query parameters: `search`, `category`, `storeId`, `sort` (`newest`, `price-asc`, `price-desc`), and `page`.
+- Public API: `GET /api/catalog/products`, `GET /api/catalog/products/:id`, `GET /api/catalog/filters`. List query parameters: `search`, canonical garment `category`, independent `gender` (`mujer`, `hombre`, `unisex`), `storeId`, `sort` (`newest`, `price-asc`, `price-desc`), and `page`.
+- Catalog filters normalize legacy `category`/`garmentType` combinations into garment types and derive audience from `attributes.genero`, while retaining legacy `Mujer`/`Hombre` categories as a fallback. The filter groups are independent: choosing `tops` does not discard `Mujer`, and vice versa.
+- The three Heinz Club tops named in marketplace improvement 6 are classified as `mujer` by the idempotent backend deployment seed if their audience field is missing. That data correction reaches production with the backend deploy/seed; publishing the frontend alone does not change catalog records.
 - Only non-deleted `PUBLISHED` products belonging to non-deleted `ACTIVE` stores are exposed. Internal attributes, inventory rows, reservations, store contacts, and audit data are not returned.
 - Available stock subtracts firm and unexpired live holds from inventory, with zero as the minimum. Only active variants are exposed; the update date is shown in detail.
 - Available cards retain color photographs and a green stock label. Sold-out and unconfirmed-stock cards use grayscale photographs and distinct text badges (Agotado / Stock por confirmar); details and favorites remain usable. A mixed product with any unknown active-variant inventory remains unconfirmed, matching current cart eligibility. Unknown stock is never displayed as verified zero stock.
 - Brand directory eligibility uses RN-10: at least three published products. Products from smaller catalogs remain individually visible.
 - Photos use the first HTTPS `ProductAttribute` with code `image_url`, ordered by position. No image means an explicit missing-photo placeholder, not a fabricated product image. No database migration or seed data is included.
+
+### Customer Information
+
+The public footer links to `/informacion#terminos`, `#privacidad`, `#envios`, `#cambios`, `#reclamos`, and `#soporte`. The page describes current checkout/order behavior and explicitly labels the full legal terms, privacy notice, change/return policy, delivery promises, and official complaint/support channels as pending where they have not been approved or configured. It does not expose store phone numbers as platform support or present placeholder text as a binding policy.
 
 The storefront includes account-owned cart and authenticated checkout, creating PENDING_PAYMENT orders and temporary stock holds without charging a payment. Missing/ambiguous delivery tariffs and unknown stock block confirmation; no free shipping or fake variants are inferred. Full RN-08 operational eligibility, payment capture, email verification, stale-stock policy and delivery promises remain separate work. Merely adding to cart does not reserve stock.
 
@@ -71,6 +79,8 @@ The user administration form still accepts a store UUID. The store record now pr
 
 ## Store management
 
+Product photos can be taken with the phone camera or selected from the device in the new-product form. JPG, PNG and WebP files up to 8 MB upload through `POST /api/store-workspace/stores/:storeId/product-images` to the configured object store; the form shows progress, errors and a preview. The product record stores only the returned HTTPS URL. Manual HTTPS URL entry remains available as an alternative. Product-writing store roles can upload; configure the private `OBJECT_STORAGE_*` endpoint, bucket, credentials, region and public CDN URL first. Without them the endpoint returns a setup error and does not fall back to PostgreSQL or local disk.
+
 `/portal#stores` supports store creation, basic data editing, split operating shifts, user assignment and the latest 20 record audit entries. All actions require `SUPER_ADMIN`, a valid session and completed password replacement.
 
 - Stores are created as `APPLIED`. Commercial name, gallery, stand, international WhatsApp number and an audit reason are required; legal name and operating hours can be completed later.
@@ -87,16 +97,16 @@ Validation: 16 store tests plus 15 nearby catalog/information tests, frontend/ba
 
 ## Administrative information
 
-The general administration workspace includes these modules, available only to `SUPER_ADMIN` after mandatory password replacement. Payouts support creating audited drafts only; other information remains read-only:
+The general administration workspace includes these modules, available only to `SUPER_ADMIN` after mandatory password replacement. Payouts support creating audited drafts only. Configuration supports audited shipping/calendar updates and the approved AGENCY commission rate; other information remains read-only:
 
-| Portal section   | Current information                                                                  | URL                     |
-| ---------------- | ------------------------------------------------------------------------------------ | ----------------------- |
-| Stores           | Editable records, split shifts, user assignment and record audit history             | `/portal#stores`        |
-| Internal catalog | Registered products, publication status, prices, active variant counts, descriptions | `/portal#products`      |
-| Orders           | Order numbers, stored totals, statuses and promised delivery dates                   | `/portal#orders`        |
-| Warehouse        | Recorded shipments, scheduled pickup, tracking and dispatch/delivery dates           | `/portal#warehouse`     |
-| Finance          | Payout list and ledger; manual PEN drafts, with a visibly marked DEMO example        | `/portal#finance`       |
-| Configuration    | Approved numeric parameters; editable logistics dates and shipping rates             | `/portal#configuration` |
+| Portal section   | Current information                                                                          | URL                     |
+| ---------------- | -------------------------------------------------------------------------------------------- | ----------------------- |
+| Stores           | Editable records, split shifts, user assignment and record audit history                     | `/portal#stores`        |
+| Internal catalog | Registered products, publication status, prices, active variant counts, descriptions         | `/portal#products`      |
+| Orders           | Order numbers, stored totals, statuses and promised delivery dates                           | `/portal#orders`        |
+| Warehouse        | Recorded shipments, scheduled pickup, tracking and dispatch/delivery dates                   | `/portal#warehouse`     |
+| Finance          | Payout list and ledger; manual PEN drafts, with a visibly marked DEMO example                | `/portal#finance`       |
+| Configuration    | Approved numeric parameters; editable logistics dates, shipping rates, and AGENCY commission | `/portal#configuration` |
 
 Users and access remain at `/portal#users`. These are internal modules, not a link to the public customer catalog. Logout still clears the local session and navigates to `/`.
 

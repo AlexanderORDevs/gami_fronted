@@ -1,0 +1,124 @@
+.public-information {
+  min-height: 100dvh;
+  color: var(--ink);
+  background: var(--surface);
+}
+.public-information-header {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px max(24px, calc((100vw - 1120px) / 2));
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+.public-information-brand {
+  font:
+    400 32px/1 var(--font-display),
+    Georgia,
+    serif;
+  color: var(--ink);
+  text-decoration: none;
+}
+.public-information-back,
+.public-information-nav a,
+.public-information-footer a {
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.public-information-intro,
+.public-information-content,
+.public-information-nav,
+.public-information-footer {
+  width: min(100% - 48px, 920px);
+  margin-inline: auto;
+}
+.public-information-intro {
+  padding: 56px 0 34px;
+}
+.public-information-intro h1 {
+  max-width: 700px;
+  margin: 8px 0 12px;
+  font:
+    400 42px/1.12 var(--font-display),
+    Georgia,
+    serif;
+  overflow-wrap: anywhere;
+}
+.public-information-intro > p:last-child {
+  max-width: 660px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.public-information-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.public-information-content {
+  padding: 8px 0 48px;
+}
+.public-information-section {
+  scroll-margin-top: 24px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--line);
+}
+.public-information-section h2 {
+  margin: 0 0 12px;
+  font:
+    400 24px/1.2 var(--font-display),
+    Georgia,
+    serif;
+}
+.public-information-section p {
+  max-width: 760px;
+  margin: 0 0 12px;
+  color: #56464d;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.public-information-section .public-information-status {
+  margin-top: 16px;
+  color: #7a3d08;
+  font-size: 12px;
+  font-weight: 600;
+}
+.public-information-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0 32px;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .public-information-header {
+    min-height: 64px;
+    padding: 12px 20px;
+  }
+  .public-information-intro,
+  .public-information-content,
+  .public-information-nav,
+  .public-information-footer {
+    width: calc(100% - 40px);
+  }
+  .public-information-intro {
+    padding-top: 38px;
+  }
+  .public-information-intro h1 {
+    font-size: 34px;
+  }
+  .public-information-nav {
+    gap: 12px 18px;
+  }
+  .public-information-footer {
+    flex-wrap: wrap;
+  }
+}

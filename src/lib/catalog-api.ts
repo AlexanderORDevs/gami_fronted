@@ -11,6 +11,7 @@ export type CatalogProduct = {
   name: string;
   description: string | null;
   category: string;
+  gender: "mujer" | "hombre" | "unisex" | null;
   unitPriceInCents: number;
   wholesalePriceInCents: number | null;
   wholesaleMinimum: number | null;
@@ -53,11 +54,13 @@ export type CatalogPage = {
 };
 export type CatalogFilters = {
   categories: string[];
+  genders: string[];
   stores: { id: string; displayName: string }[];
 };
 export type CatalogQuery = {
   search: string;
   category: string;
+  gender: string;
   storeId: string;
   sort: string;
   page: number;

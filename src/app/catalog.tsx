@@ -13,6 +13,7 @@ import {
   ArrowRight,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
   Heart,
   Search,
   Shirt,
@@ -45,6 +46,7 @@ const EMPTY_PAGE: CatalogPage = { data: [], total: 0, page: 1, pages: 0 };
 const INITIAL_QUERY: CatalogQuery = {
   search: "",
   category: "",
+  gender: "",
   storeId: "",
   sort: "newest",
   page: 1,
@@ -587,7 +589,7 @@ function EmptyProducts({
   onReset,
 }: Readonly<{ saved: boolean; query: CatalogQuery; onReset: () => void }>) {
   const canReset = Boolean(
-    query.search || query.category || query.storeId || saved,
+    query.search || query.category || query.gender || query.storeId || saved,
   );
   return (
     <div className="catalog-empty">
@@ -634,6 +636,7 @@ function CatalogContent() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<CatalogFilters>({
     categories: [],
+    genders: [],
     stores: [],
   });
   const [result, setResult] = useState<CatalogPage>(EMPTY_PAGE);
@@ -760,6 +763,10 @@ function CatalogContent() {
             <Store size={17} />
             Marcas
           </button>
+          <Link href="/como-funciona">
+            <CircleHelp size={17} />
+            Cómo funciona
+          </Link>
           {account.session && !account.session.user.mustChangePassword && (
             <button
               aria-current={view === "saved" ? "page" : undefined}
@@ -823,6 +830,11 @@ function CatalogContent() {
             <h1>
               <CatalogTitle view={view} />
             </h1>
+            {view === "products" && (
+              <Link className="catalog-process-link" href="/como-funciona">
+                Cómo funciona Gami <ArrowRight size={15} />
+              </Link>
+            )}
           </div>
           <p>
             {view === "saved"
@@ -850,11 +862,20 @@ function CatalogContent() {
                 <ArrowRight size={20} />
               </button>
             </form>
-            <div className="category-strip" aria-label="Categorías">
+            <div
+              className="category-strip"
+              role="group"
+              aria-label="Tipo de prenda"
+            >
               <button
-                aria-pressed={!query.category}
+                aria-pressed={!query.category && !query.gender}
                 onClick={() =>
-                  setQuery((current) => ({ ...current, category: "", page: 1 }))
+                  setQuery((current) => ({
+                    ...current,
+                    category: "",
+                    gender: "",
+                    page: 1,
+                  }))
                 }
               >
                 Ver todo
@@ -864,15 +885,61 @@ function CatalogContent() {
                   key={category}
                   aria-pressed={query.category === category}
                   onClick={() =>
-                    setQuery((current) => ({ ...current, category, page: 1 }))
+                    setQuery((current) => ({
+                      ...current,
+                      category,
+                      page: 1,
+                    }))
                   }
                 >
                   {category}
                 </button>
               ))}
             </div>
+            {filters.genders.length > 0 && (
+              <div
+                className="category-strip gender-strip"
+                role="group"
+                aria-label="Público"
+              >
+                <span className="filter-group-label">Público</span>
+                <button
+                  aria-pressed={!query.gender}
+                  onClick={() =>
+                    setQuery((current) => ({ ...current, gender: "", page: 1 }))
+                  }
+                >
+                  Todos
+                </button>
+                {filters.genders.map((gender) => (
+                  <button
+                    key={gender}
+                    aria-pressed={query.gender === gender}
+                    onClick={() =>
+                      setQuery((current) => ({
+                        ...current,
+                        gender,
+                        page: 1,
+                      }))
+                    }
+                  >
+                    {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="catalog-controls">
-              <h2>{query.category || "Todas las prendas"}</h2>
+              <h2>
+                {[
+                  query.category,
+                  query.gender
+                    ? query.gender.charAt(0).toUpperCase() +
+                      query.gender.slice(1)
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "Todas las prendas"}
+              </h2>
               <div>
                 <label>
                   <SlidersHorizontal size={16} />
@@ -1041,6 +1108,17 @@ function CatalogContent() {
       <footer className="catalog-footer">
         <Image src="/gami-mark.svg" width={48} height={40} alt="Gami" />
         <p>Marcas locales. Tu próximo favorito.</p>
+        <nav
+          className="catalog-footer-links"
+          aria-label="Información para clientes"
+        >
+          <Link href="/informacion#terminos">Términos</Link>
+          <Link href="/informacion#privacidad">Privacidad</Link>
+          <Link href="/informacion#envios">Envíos</Link>
+          <Link href="/informacion#cambios">Cambios</Link>
+          <Link href="/informacion#reclamos">Reclamos</Link>
+          <Link href="/informacion#soporte">Soporte</Link>
+        </nav>
       </footer>
       {selectedId && (
         <ProductDetail

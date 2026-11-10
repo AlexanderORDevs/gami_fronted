@@ -117,6 +117,20 @@
 .operation-photo .field {
   flex: 1;
 }
+.operation-photo-upload {
+  flex-basis: 100%;
+}
+.operation-photo-upload input {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+}
+.operation-photo > output,
+.operation-photo > [role="alert"] {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
 .operation-photo img {
   width: 64px;
   height: 64px;

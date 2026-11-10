@@ -9,6 +9,7 @@ import {
   type SyntheticEvent,
 } from "react";
 import Image from "next/image";
+import { uploadStoreProductImage } from "@/lib/admin-api";
 import {
   ChevronLeft,
   ChevronRight,
@@ -244,6 +245,13 @@ export function OperationToolbar({
 }
 
 type SaveOperation = (input: object, variantId?: string) => Promise<void>;
+type ProductPhoto = {
+  id: string;
+  url: string;
+  fileName: string;
+  uploading: boolean;
+  error: string;
+};
 type FormProps = Readonly<{
   token: string;
   storeId: string;
@@ -361,7 +369,15 @@ function ProductForm({ token, storeId, pending, save }: FormProps) {
   const [error, setError] = useState("");
   const [category, setCategory] = useState("");
   const [variants, setVariants] = useState([crypto.randomUUID()]);
-  const [photos, setPhotos] = useState([{ id: crypto.randomUUID(), url: "" }]);
+  const [photos, setPhotos] = useState<ProductPhoto[]>([
+    {
+      id: crypto.randomUUID(),
+      url: "",
+      fileName: "",
+      uploading: false,
+      error: "",
+    },
+  ]);
   const [wholesale, setWholesale] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
@@ -376,8 +392,47 @@ function ProductForm({ token, storeId, pending, save }: FormProps) {
   }, [token, storeId]);
   if (error) return <p role="alert">{error}</p>;
   if (!options) return <output>Cargando opciones...</output>;
+  async function uploadPhoto(photoId: string, file?: File) {
+    if (!file) return;
+    setPhotos((current) =>
+      current.map((photo) =>
+        photo.id === photoId
+          ? {
+              ...photo,
+              url: "",
+              fileName: file.name,
+              uploading: true,
+              error: "",
+            }
+          : photo,
+      ),
+    );
+    try {
+      const result = await uploadStoreProductImage(token, storeId, file);
+      setPhotos((current) =>
+        current.map((photo) =>
+          photo.id === photoId
+            ? { ...photo, url: result.url, uploading: false, error: "" }
+            : photo,
+        ),
+      );
+    } catch (error_) {
+      setPhotos((current) =>
+        current.map((photo) =>
+          photo.id === photoId
+            ? {
+                ...photo,
+                uploading: false,
+                error: failureMessage(error_),
+              }
+            : photo,
+        ),
+      );
+    }
+  }
   function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (photos.some((photo) => photo.uploading || !photo.url.trim())) return;
     const data = new FormData(event.currentTarget);
     void save({
       name: text(data, "name"),
@@ -502,22 +557,40 @@ function ProductForm({ token, storeId, pending, save }: FormProps) {
           {photos.map((photo, index) => (
             <div className="operation-photo" key={photo.id}>
               <Field
-                label={`Foto ${index + 1} · URL HTTPS`}
+                label={`Foto ${index + 1} · URL HTTPS alternativa`}
                 type="url"
                 value={photo.url}
-                required
                 pattern="https://.*"
                 maxLength={180}
                 onChange={(event) =>
                   setPhotos((current) =>
                     current.map((item) =>
                       item.id === photo.id
-                        ? { ...item, url: event.target.value }
+                        ? { ...item, url: event.target.value, error: "" }
                         : item,
                     ),
                   )
                 }
               />
+              <label className="field operation-photo-upload">
+                <span>
+                  Tomar o elegir una foto (JPG, PNG o WebP · máx. 8 MB)
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  required={!photo.url}
+                  disabled={photo.uploading}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    void uploadPhoto(photo.id, file);
+                  }}
+                />
+              </label>
+              {photo.uploading && <output>Subiendo {photo.fileName}...</output>}
+              {photo.error && <p role="alert">{photo.error}</p>}
               {photo.url.startsWith("https://") && (
                 <Image
                   src={photo.url}
@@ -550,7 +623,13 @@ function ProductForm({ token, storeId, pending, save }: FormProps) {
             onClick={() =>
               setPhotos((current) => [
                 ...current,
-                { id: crypto.randomUUID(), url: "" },
+                {
+                  id: crypto.randomUUID(),
+                  url: "",
+                  fileName: "",
+                  uploading: false,
+                  error: "",
+                },
               ])
             }
           >
@@ -611,7 +690,14 @@ function ProductForm({ token, storeId, pending, save }: FormProps) {
             Agregar variante
           </button>
         </fieldset>
-        <Submit pending={pending}>Enviar a revisión</Submit>
+        <Submit
+          pending={pending || photos.some((photo) => photo.uploading)}
+          disabled={photos.some(
+            (photo) => !photo.url.trim() || Boolean(photo.error),
+          )}
+        >
+          Enviar a revisión
+        </Submit>
       </fieldset>
     </form>
   );

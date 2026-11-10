@@ -98,6 +98,11 @@ export type UpsertCalendarDayInput = {
   reason: string;
 };
 
+export type SetAgencyCommissionRateInput = {
+  rateBasisPoints: number;
+  reason: string;
+};
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
   "http://localhost:4000/api";
@@ -135,6 +140,41 @@ export async function adminRequest<T>(
 
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export async function uploadStoreProductImage(
+  accessToken: string,
+  storeId: string,
+  file: File,
+): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(
+    `${API_URL}/store-workspace/stores/${encodeURIComponent(storeId)}/product-images`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: form,
+      cache: "no-store",
+    },
+  ).catch(() => {
+    throw new Error(
+      "No se pudo conectar con Gami. Revisa tu conexión e inténtalo de nuevo.",
+    );
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const message = Array.isArray(payload?.message)
+      ? payload.message.join(" ")
+      : payload?.message;
+    throw new ApiError(
+      message ?? localizedApiError(undefined, response.status),
+      response.status,
+    );
+  }
+  return response.json() as Promise<{ url: string }>;
 }
 
 export function listRoles(accessToken: string) {
@@ -280,6 +320,20 @@ export function upsertCalendarDay(
   input: UpsertCalendarDayInput,
 ) {
   return adminRequest(accessToken, "/admin/information/calendar", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function setAgencyCommissionRate(
+  accessToken: string,
+  input: SetAgencyCommissionRateInput,
+) {
+  return adminRequest<{
+    key: string;
+    rateBasisPoints: number;
+    updatedAt: string;
+  }>(accessToken, "/admin/information/settings/agency-commission-rate", {
     method: "POST",
     body: JSON.stringify(input),
   });
