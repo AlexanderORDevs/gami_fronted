@@ -30,6 +30,9 @@ import {
 } from "@/lib/admin-api";
 import "./admin-information.css";
 import { getStoreInformation, type WorkspaceStore } from "@/lib/store-api";
+import { OrderDetailDialog } from "./order-detail";
+import { PayoutRegistration } from "./payout-registration";
+import { LogisticsConfiguration } from "./logistics-configuration";
 import { OperationStoreSelect, OperationToolbar } from "./store-operations";
 
 export const ADMIN_SECTIONS = [
@@ -63,7 +66,7 @@ export function useAdminSection() {
 type Column = {
   key: string;
   label: string;
-  format?: "money" | "date" | "day" | "status" | "boolean" | "setting";
+  format?: "money" | "date" | "day" | "status" | "boolean" | "setting" | "demo";
   detailOnly?: boolean;
 };
 type ResourceDefinition = {
@@ -94,6 +97,7 @@ const RESOURCES: Record<InformationResource, ResourceDefinition> = {
       { key: "sizeLabel", label: "Talla" },
       { key: "color", label: "Color" },
       { key: "quantity", label: "Stock" },
+      { key: "needsReview", label: "Requiere recuento", format: "boolean" },
       { key: "stockUpdatedAt", label: "Actualización", format: "date" },
     ],
   },
@@ -222,6 +226,7 @@ const RESOURCES: Record<InformationResource, ResourceDefinition> = {
     columns: [
       store,
       status,
+      { key: "isDemo", label: "Tipo", format: "demo" },
       amount,
       { key: "scheduledAt", label: "Fecha programada", format: "date" },
       { key: "paidAt", label: "Fecha de pago", format: "date" },
@@ -314,6 +319,8 @@ const LABELS: Record<string, string> = {
   UNPUBLISHED: "No publicada",
   UNPUBLISHED_BY_SUSPENSION: "Retirada por suspensión",
   PENDING_PAYMENT: "Pendiente de pago",
+  PENDING_CONFIRMATION: "Pendiente de confirmación",
+  PRE_CONFIRMED: "Preconfirmada",
   PAID: "Pagada",
   PARTIALLY_CONFIRMED: "Confirmación parcial",
   CONFIRMED: "Confirmada",
@@ -367,6 +374,7 @@ function formatValue(row: InformationRow, column: Column): string {
       timeZone: "UTC",
     }).format(new Date(String(value)));
   if (column.format === "boolean") return value ? "Sí" : "No";
+  if (column.format === "demo") return value ? "DEMO" : "Liquidación";
   if (column.format === "status" || column.format === "setting")
     return LABELS[String(value)] ?? String(value);
   return String(value);
@@ -441,12 +449,14 @@ export function InformationTable({
   accessToken,
   resource,
   onOpen,
+  onOpenRow,
   revision = 0,
   storeId,
 }: Readonly<{
   accessToken: string;
   resource: InformationResource;
   onOpen?: (id: string) => void;
+  onOpenRow?: (row: InformationRow) => void;
   revision?: number;
   storeId?: string;
 }>) {
@@ -603,8 +613,15 @@ export function InformationTable({
                     <tr key={row.id}>
                       {columns.map((column) => (
                         <td key={column.key}>
-                          {column.format === "status" ? (
-                            <span className="information-status">
+                          {column.format === "status" ||
+                          column.format === "demo" ? (
+                            <span
+                              className={`information-status${
+                                column.format === "demo" && row.isDemo
+                                  ? " payout-demo-status"
+                                  : ""
+                              }`}
+                            >
                               {formatValue(row, column)}
                             </span>
                           ) : (
@@ -617,9 +634,11 @@ export function InformationTable({
                           className="icon-button bordered"
                           title="Ver detalle"
                           aria-label={`Ver detalle de ${formatValue(row, columns[0])}`}
-                          onClick={() =>
-                            onOpen ? onOpen(row.id) : setSelected(row)
-                          }
+                          onClick={() => {
+                            if (onOpenRow) onOpenRow(row);
+                            else if (onOpen) onOpen(row.id);
+                            else setSelected(row);
+                          }}
                         >
                           <Eye size={17} />
                         </button>
@@ -718,6 +737,9 @@ export function AdminInformation({
   const operational = ["products", "orders", "inventory", "shipments"].includes(
     resource,
   );
+  const logisticsEditable = ["calendar", "shipping-rates"].includes(resource);
+  const readOnly = !operational && resource !== "payouts" && !logisticsEditable;
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const label = ADMIN_SECTIONS.find((item) => item.id === section)!.label;
   return (
     <section
@@ -730,7 +752,7 @@ export function AdminInformation({
           <h1 id="information-title">{label}</h1>
           <p>{SECTION_DESCRIPTIONS[section]}</p>
         </div>
-        {!operational && (
+        {readOnly && (
           <span className="information-mode">
             <Eye size={15} /> Solo consulta
           </span>
@@ -763,6 +785,28 @@ export function AdminInformation({
           />
         </>
       )}
+      {resource === "payouts" && (
+        <>
+          <OperationStoreSelect
+            token={accessToken}
+            value={selectedStore?.id ?? ""}
+            onChange={setSelectedStore}
+            label="Tienda para liquidar"
+          />
+          <PayoutRegistration
+            accessToken={accessToken}
+            store={selectedStore}
+            onSaved={() => setRevision((current) => current + 1)}
+          />
+        </>
+      )}
+      {logisticsEditable && (
+        <LogisticsConfiguration
+          accessToken={accessToken}
+          resource={resource as "calendar" | "shipping-rates"}
+          onSaved={() => setRevision((current) => current + 1)}
+        />
+      )}
       {resource === "inventory" && !selectedStore ? (
         <p>Sin tienda seleccionada.</p>
       ) : (
@@ -772,6 +816,22 @@ export function AdminInformation({
           resource={resource}
           storeId={operational ? selectedStore?.id : undefined}
           revision={revision}
+          onOpenRow={
+            resource === "orders"
+              ? (row) => {
+                  if (typeof row.orderNumber === "string")
+                    setSelectedOrder(row.orderNumber);
+                }
+              : undefined
+          }
+        />
+      )}
+      {selectedOrder && (
+        <OrderDetailDialog
+          accessToken={accessToken}
+          orderNumber={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onChanged={() => setRevision((current) => current + 1)}
         />
       )}
     </section>

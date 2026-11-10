@@ -4,20 +4,21 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
-  useSyncExternalStore,
   type SyntheticEvent,
 } from "react";
 import {
   ArrowRight,
-  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   Heart,
   Search,
   Shirt,
   SlidersHorizontal,
+  ShoppingBag,
+  UserRound,
   Store,
   X,
 } from "lucide-react";
@@ -30,10 +31,16 @@ import {
   getCatalogFilters,
   getCatalogProduct,
   formatPrice,
+  getCatalogAvailability,
+  stockFirst,
 } from "@/lib/catalog-api";
 import "./catalog.css";
+import { useCart } from "@/lib/cart";
+import type { CartItem } from "@/lib/checkout-api";
+import { CheckoutDialog } from "./checkout";
+import { CustomerProvider, useCustomer } from "@/lib/customer-session";
+import { CustomerAccountDialog } from "./customer-account";
 
-const SAVED_KEY = "gami.catalog.saved";
 const EMPTY_PAGE: CatalogPage = { data: [], total: 0, page: 1, pages: 0 };
 const INITIAL_QUERY: CatalogQuery = {
   search: "",
@@ -43,21 +50,6 @@ const INITIAL_QUERY: CatalogQuery = {
   page: 1,
 };
 
-function subscribeSaved(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener("gami-saved", callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener("gami-saved", callback);
-  };
-}
-function savedSnapshot() {
-  try {
-    return localStorage.getItem(SAVED_KEY) ?? "[]";
-  } catch {
-    return "[]";
-  }
-}
 function parseSavedIds(raw: string): string[] {
   try {
     const value: unknown = JSON.parse(raw);
@@ -69,16 +61,12 @@ function parseSavedIds(raw: string): string[] {
   }
 }
 function useSavedProducts() {
-  const raw = useSyncExternalStore(subscribeSaved, savedSnapshot, () => "[]");
-  const ids = parseSavedIds(raw);
-  function toggle(id: string) {
-    const next = ids.includes(id)
-      ? ids.filter((savedId) => savedId !== id)
-      : [...ids.slice(-99), id];
-    localStorage.setItem(SAVED_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event("gami-saved"));
-  }
-  return { ids, raw, toggle };
+  const account = useCustomer();
+  return {
+    ids: account.favorites,
+    raw: JSON.stringify(account.favorites),
+    toggle: account.toggleFavorite,
+  };
 }
 
 function ProductPhoto({ product }: Readonly<{ product: CatalogProduct }>) {
@@ -107,11 +95,15 @@ function ProductPhoto({ product }: Readonly<{ product: CatalogProduct }>) {
 function ProductCard({
   product,
   saved,
+  canSave,
+  savingDisabled,
   onOpen,
   onSave,
 }: Readonly<{
   product: CatalogProduct;
   saved: boolean;
+  canSave: boolean;
+  savingDisabled: boolean;
   onOpen: () => void;
   onSave: () => void;
 }>) {
@@ -121,14 +113,14 @@ function ProductCard({
   const colors = product.variants.length
     ? [...new Set(product.variants.map((variant) => variant.color))]
     : (product.declaredColors ?? []).map((color) => color.name);
-  const stockKnown = product.stockKnown ?? product.variants.length > 0;
-  const stockStatus = product.variants.some(
-    (variant) => variant.availableStock > 0,
-  )
-    ? "Con stock"
-    : "Agotado";
+  const availability = getCatalogAvailability(product);
+  const stockStatus = {
+    available: "Con stock",
+    "sold-out": "Agotado",
+    unconfirmed: "Stock por confirmar",
+  }[availability];
   return (
-    <article className="product-card">
+    <article className="product-card" data-availability={availability}>
       <div className="product-photo">
         <button
           className="product-open"
@@ -140,15 +132,23 @@ function ProductCard({
         {product.imageIsReference && (
           <span className="product-reference">Imagen referencial</span>
         )}
+        {availability !== "available" && (
+          <span className="product-stock-badge">{stockStatus}</span>
+        )}
         <button
           className="product-save"
           onClick={onSave}
+          disabled={savingDisabled}
           aria-label={
             saved
               ? `Quitar ${product.name} de guardados`
               : `Guardar ${product.name}`
           }
-          title={saved ? "Quitar de guardados" : "Guardar prenda"}
+          title={
+            !canSave
+              ? "Inicia sesión para guardar prendas"
+              : "Guardar o quitar de favoritos"
+          }
           aria-pressed={saved}
         >
           <Heart size={19} fill={saved ? "currentColor" : "none"} />
@@ -165,7 +165,7 @@ function ProductCard({
       </p>
       <div className="product-meta">
         <strong>{formatPrice(product.unitPriceInCents)}</strong>
-        <span>{stockKnown ? stockStatus : "Stock por confirmar"}</span>
+        <span>{stockStatus}</span>
       </div>
     </article>
   );
@@ -249,26 +249,82 @@ const specificationLabels: Record<string, string> = {
   care: "Cuidados",
 };
 
+function isOutsideDialog(element: HTMLDialogElement, event: MouseEvent) {
+  if (event.target !== element) return false;
+  const bounds = element.getBoundingClientRect();
+  return (
+    event.clientX < bounds.left ||
+    event.clientX > bounds.right ||
+    event.clientY < bounds.top ||
+    event.clientY > bounds.bottom
+  );
+}
+
+function getPurchaseBlockReason(
+  product: CatalogProduct | null,
+  variant: CatalogProduct["variants"][number] | undefined,
+  quantity: number,
+) {
+  if (
+    product &&
+    (product.stockKnown === false || product.variants.length === 0)
+  )
+    return "Esta prenda todavía no tiene stock confirmado. La tienda debe registrar sus tallas, colores y existencias antes de que puedas agregarla al carrito.";
+  if (product && !variant)
+    return "Selecciona una talla y un color en el campo de arriba para habilitar el carrito.";
+  if (variant && variant.availableStock <= 0)
+    return "Esta combinación de talla y color está agotada.";
+  if (!Number.isSafeInteger(quantity) || quantity < 1)
+    return "Ingresa una cantidad entera mayor que cero.";
+  if (variant && quantity > variant.availableStock)
+    return `Solo hay ${variant.availableStock} unidades disponibles para esta talla y color.`;
+  return "";
+}
+
 function ProductDetail({
   id,
   saved,
+  canSave,
+  savingDisabled,
   onSave,
   onClose,
+  onAdd,
 }: Readonly<{
   id: string;
   saved: boolean;
+  canSave: boolean;
+  savingDisabled: boolean;
   onSave: () => void;
   onClose: () => void;
+  onAdd: (item: CartItem) => Promise<void>;
 }>) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const backdropPressed = useRef(false);
   const [product, setProduct] = useState<CatalogProduct | null>(null);
   const [variantId, setVariantId] = useState("");
   const [error, setError] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [purchaseMessage, setPurchaseMessage] = useState("");
+  const [purchaseError, setPurchaseError] = useState("");
+  const [adding, setAdding] = useState(false);
+  const closeFromBackdrop = useEffectEvent(onClose);
   useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
     const controller = new AbortController();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    dialog.current?.showModal();
+    element.showModal();
+    const pointerDown = (event: PointerEvent) => {
+      backdropPressed.current = isOutsideDialog(element, event);
+    };
+    const click = (event: MouseEvent) => {
+      if (backdropPressed.current && isOutsideDialog(element, event))
+        closeFromBackdrop();
+      backdropPressed.current = false;
+    };
+    element.addEventListener("pointerdown", pointerDown);
+    element.addEventListener("click", click);
     getCatalogProduct(id, controller.signal)
       .then(setProduct)
       .catch((error_: unknown) => {
@@ -281,13 +337,21 @@ function ProductDetail({
       });
     return () => {
       controller.abort();
+      element.removeEventListener("pointerdown", pointerDown);
+      element.removeEventListener("click", click);
       document.body.style.overflow = previousOverflow;
     };
   }, [id]);
   const variant = product?.variants.find((item) => item.id === variantId);
+  const favoriteLabel = saved ? "Quitar de guardados" : "Guardar prenda";
   const variantStock = variant
     ? `${variant.availableStock} unidades disponibles`
     : "Selecciona talla y color para consultar el stock.";
+  const purchaseBlockReason = getPurchaseBlockReason(
+    product,
+    variant,
+    quantity,
+  );
   return (
     <dialog
       ref={dialog}
@@ -358,11 +422,20 @@ function ProductDetail({
                   <select
                     id="product-variant"
                     value={variantId}
-                    onChange={(event) => setVariantId(event.target.value)}
+                    onChange={(event) => {
+                      setVariantId(event.target.value);
+                      setQuantity(1);
+                      setPurchaseMessage("");
+                      setPurchaseError("");
+                    }}
                   >
                     <option value="">Selecciona una variante</option>
                     {product.variants.map((item) => (
-                      <option key={item.id} value={item.id}>
+                      <option
+                        key={item.id}
+                        value={item.id}
+                        disabled={item.availableStock <= 0}
+                      >
                         {item.size} · {item.color}
                         {item.availableStock === 0 ? " · Agotado" : ""}
                       </option>
@@ -412,13 +485,87 @@ function ProductDetail({
                 }).format(new Date(variant.stockUpdatedAt))}
               </p>
             )}
+            <div className="detail-purchase">
+              <label className="field">
+                <span>Cantidad</span>
+                <input
+                  type="number"
+                  aria-label="Cantidad a agregar"
+                  min={1}
+                  max={variant?.availableStock ?? 1}
+                  step={1}
+                  value={quantity || ""}
+                  disabled={!variant || product.stockKnown === false}
+                  onChange={(event) => {
+                    setQuantity(Number(event.target.value));
+                    setPurchaseMessage("");
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={adding || Boolean(purchaseBlockReason)}
+                title={
+                  purchaseBlockReason ||
+                  "Agregar la variante seleccionada al carrito"
+                }
+                aria-describedby={
+                  purchaseBlockReason ? "purchase-availability" : undefined
+                }
+                onClick={async () => {
+                  if (!variant) return;
+                  setAdding(true);
+                  try {
+                    await onAdd({
+                      productId: product.id,
+                      variantId: variant.id,
+                      name: product.name,
+                      storeName: product.store.displayName,
+                      imageUrl: product.imageUrl,
+                      size: variant.size,
+                      color: variant.color,
+                      unitPriceInCents: product.unitPriceInCents,
+                      availableStock: variant.availableStock,
+                      quantity,
+                    });
+                    setPurchaseMessage("Agregado al carrito.");
+                    setPurchaseError("");
+                  } catch (error_) {
+                    setPurchaseError(
+                      error_ instanceof Error
+                        ? error_.message
+                        : "No se pudo actualizar el carrito.",
+                    );
+                  } finally {
+                    setAdding(false);
+                  }
+                }}
+              >
+                <ShoppingBag size={18} />
+                {adding ? "Agregando..." : "Agregar al carrito"}
+              </button>
+              {purchaseBlockReason && (
+                <output id="purchase-availability" className="product-options">
+                  {purchaseBlockReason}
+                </output>
+              )}
+              {purchaseMessage && <output>{purchaseMessage}</output>}
+              {purchaseError && <p role="alert">{purchaseError}</p>}
+            </div>
             <button
               className="save-detail"
               onClick={onSave}
+              disabled={savingDisabled}
+              title={
+                canSave
+                  ? "Guardar o quitar de favoritos"
+                  : "Inicia sesión para guardar prendas"
+              }
               aria-pressed={saved}
             >
               <Heart size={18} fill={saved ? "currentColor" : "none"} />
-              {saved ? "Quitar de guardados" : "Guardar prenda"}
+              {canSave ? favoriteLabel : "Inicia sesión para guardar prendas"}
             </button>
           </div>
         </div>
@@ -465,6 +612,23 @@ function EmptyProducts({
 }
 
 export function Catalog() {
+  return (
+    <CustomerProvider>
+      <SessionCatalog />
+      <CustomerAccountDialog />
+    </CustomerProvider>
+  );
+}
+
+function SessionCatalog() {
+  const account = useCustomer();
+  return <CatalogContent key={account.session?.user.id ?? "visitor"} />;
+}
+
+function CatalogContent() {
+  const account = useCustomer();
+  const cart = useCart();
+  const [cartOpen, setCartOpen] = useState(false);
   const [view, setView] = useState<"products" | "brands" | "saved">("products");
   const [query, setQuery] = useState(INITIAL_QUERY);
   const [search, setSearch] = useState("");
@@ -513,9 +677,9 @@ export function Catalog() {
               ),
             ),
           );
-          const data = products.filter(
-            (product): product is CatalogProduct => product !== null,
-          );
+          const data = products
+            .filter((product): product is CatalogProduct => product !== null)
+            .sort(stockFirst);
           next = { data, total: data.length, page: 1, pages: 1 };
         } else next = await getCatalog(query, controller.signal);
         if (!controller.signal.aborted) {
@@ -554,12 +718,19 @@ export function Catalog() {
     history.pushState(null, "", url);
     setSelectedId(id);
   }
-  function save(id: string) {
+  async function save(id: string) {
+    if (!account.session || account.session.user.mustChangePassword) {
+      openDetail(null);
+      account.open("login");
+      return;
+    }
     try {
-      toggle(id);
-    } catch {
+      await toggle(id);
+    } catch (error_) {
       setError(
-        "No se pudo guardar en este navegador. Revisa los permisos de almacenamiento.",
+        error_ instanceof Error
+          ? error_.message
+          : "No se pudo guardar la prenda.",
       );
     }
   }
@@ -589,21 +760,61 @@ export function Catalog() {
             <Store size={17} />
             Marcas
           </button>
-          <button
-            aria-current={view === "saved" ? "page" : undefined}
-            onClick={() => changeView("saved")}
-          >
-            <Heart size={17} />
-            Guardados
-            {savedIds.length > 0 && (
-              <span className="saved-count">{savedIds.length}</span>
-            )}
-          </button>
+          {account.session && !account.session.user.mustChangePassword && (
+            <button
+              aria-current={view === "saved" ? "page" : undefined}
+              onClick={() => {
+                if (!account.session) account.open("login");
+                else changeView("saved");
+              }}
+            >
+              <Heart size={17} />
+              Guardados
+              {savedIds.length > 0 && (
+                <span className="saved-count">{savedIds.length}</span>
+              )}
+            </button>
+          )}
         </nav>
-        <Link href="/portal" className="portal-entry">
-          Ingresar al portal <ArrowUpRight size={17} />
-        </Link>
+        <button
+          type="button"
+          className="secondary-button catalog-cart-button"
+          disabled={account.loading}
+          onClick={() => {
+            if (!account.session || account.session.user.mustChangePassword)
+              account.open("login");
+            else setCartOpen(true);
+          }}
+        >
+          <ShoppingBag size={18} />
+          Carrito{" "}
+          <span>
+            {cart.items.reduce((total, item) => total + item.quantity, 0)}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="secondary-button catalog-account-button"
+          disabled={account.loading}
+          onClick={() => account.open(account.session ? "profile" : "login")}
+          title={account.profile?.fullName ?? "Acceder a Gami"}
+        >
+          <UserRound size={18} />
+          <span>{account.session ? "Mi espacio" : "Acceder"}</span>
+        </button>
       </header>
+      {account.error && (
+        <p className="catalog-account-status" role="alert">
+          {account.error}
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => account.open("profile")}
+          >
+            Revisar mi cuenta
+          </button>
+        </p>
+      )}
 
       <main id="catalog-content" className="catalog-main">
         <section className="catalog-intro">
@@ -766,6 +977,13 @@ export function Catalog() {
                         key={product.id}
                         product={product}
                         saved={savedIds.includes(product.id)}
+                        canSave={
+                          !!account.session &&
+                          !account.session.user.mustChangePassword &&
+                          !account.loading &&
+                          !account.busy
+                        }
+                        savingDisabled={account.loading || account.busy}
                         onOpen={() => openDetail(product.id)}
                         onSave={() => save(product.id)}
                       />
@@ -823,19 +1041,36 @@ export function Catalog() {
       <footer className="catalog-footer">
         <Image src="/gami-mark.svg" width={48} height={40} alt="Gami" />
         <p>Marcas locales. Tu próximo favorito.</p>
-        <Link href="/portal">
-          Portal de tiendas y administración <ArrowUpRight size={16} />
-        </Link>
       </footer>
       {selectedId && (
         <ProductDetail
           key={selectedId}
           id={selectedId}
           saved={savedIds.includes(selectedId)}
+          canSave={
+            !!account.session &&
+            !account.session.user.mustChangePassword &&
+            !account.loading &&
+            !account.busy
+          }
+          savingDisabled={account.loading || account.busy}
           onSave={() => save(selectedId)}
           onClose={() => openDetail(null)}
+          onAdd={async (item) => {
+            if (!account.session || account.session.user.mustChangePassword) {
+              openDetail(null);
+              account.open("login");
+              throw new Error("Inicia sesión con tu cuenta de cliente.");
+            }
+            await cart.add(item);
+          }}
         />
       )}
+      {cartOpen &&
+        account.session &&
+        !account.session.user.mustChangePassword && (
+          <CheckoutDialog onClose={() => setCartOpen(false)} />
+        )}
     </div>
   );
 }

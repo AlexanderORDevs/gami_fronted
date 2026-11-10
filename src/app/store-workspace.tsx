@@ -33,6 +33,7 @@ import {
 } from "@/lib/store-api";
 import "./store-workspace.css";
 import { OperationToolbar } from "./store-operations";
+import { OrderDetailDialog } from "./order-detail";
 
 const MODULES: Partial<
   Record<AdminSection, { label: string; resources: StoreResource[] }>
@@ -192,6 +193,7 @@ function StoreContent({
   onAccessChanged: () => void;
 }>) {
   const [revision, setRevision] = useState(0);
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   if (section === "users")
     return (
       <StoreTeam
@@ -242,9 +244,25 @@ function StoreContent({
             }
             storeId={store.id}
             revision={revision}
+            onOpenRow={
+              resource === "orders"
+                ? (row) => {
+                    if (typeof row.orderNumber === "string")
+                      setSelectedOrder(row.orderNumber);
+                  }
+                : undefined
+            }
           />
         </section>
       ))}
+      {selectedOrder && (
+        <OrderDetailDialog
+          accessToken={accessToken}
+          orderNumber={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onChanged={() => setRevision((current) => current + 1)}
+        />
+      )}
     </>
   );
 }

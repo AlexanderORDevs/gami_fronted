@@ -26,6 +26,7 @@ import {
   requestPasswordReset,
 } from "@/lib/auth-api";
 import { AdminPanel } from "./admin-panel";
+import { generateSuggestedPassword } from "@/lib/password";
 import { StoreManagement } from "./store-management";
 import { StoreWorkspace, storeSections } from "./store-workspace";
 import type { WorkspaceStore, StoreResource } from "@/lib/store-api";
@@ -146,33 +147,6 @@ function WorkspaceFrame({
       </div>
     </div>
   );
-}
-
-function generateSuggestedPassword() {
-  const groups = [
-    "ABCDEFGHJKLMNPQRSTUVWXYZ",
-    "abcdefghijkmnopqrstuvwxyz",
-    "23456789",
-    "!@#$%&*?",
-  ];
-  const characters = groups.join("");
-  const randomIndex = (length: number) => {
-    const value = new Uint32Array(1);
-    crypto.getRandomValues(value);
-    return value[0] % length;
-  };
-  const password = groups.map((group) => group[randomIndex(group.length)]);
-  while (password.length < 16) {
-    password.push(characters[randomIndex(characters.length)]);
-  }
-  for (let index = password.length - 1; index > 0; index -= 1) {
-    const swapIndex = randomIndex(index + 1);
-    [password[index], password[swapIndex]] = [
-      password[swapIndex],
-      password[index],
-    ];
-  }
-  return password.join("");
 }
 
 function rotateSession(refreshToken: string) {
@@ -456,7 +430,19 @@ export function AuthPortal() {
     setError("");
     setPending(true);
     try {
-      persist(await login(username.trim(), password));
+      const authenticated = await login(username.trim(), password);
+      if (
+        authenticated.user.roles.length === 1 &&
+        authenticated.user.roles[0] === "CUSTOMER"
+      ) {
+        await logout(authenticated.tokens.accessToken);
+        setError(
+          "Tu cuenta es de cliente. Ingresa desde Mi cuenta en el catálogo.",
+        );
+        setPassword("");
+        return;
+      }
+      persist(authenticated);
       setPassword("");
     } catch {
       setError(
@@ -605,6 +591,23 @@ export function AuthPortal() {
   }
 
   if (session) {
+    if (session.user.roles.length === 1 && session.user.roles[0] === "CUSTOMER")
+      return (
+        <main className="auth-page">
+          <section>
+            <h1>Tu cuenta de cliente</h1>
+            <p>Accede a tus prendas y órdenes desde el catálogo.</p>
+            <Link href="/">Ir al catálogo</Link>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void handleLogout()}
+            >
+              Cerrar sesión
+            </button>
+          </section>
+        </main>
+      );
     const canAdministerUsers = session.user.roles.includes("SUPER_ADMIN");
     return (
       <WorkspaceFrame

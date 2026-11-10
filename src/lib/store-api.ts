@@ -48,6 +48,7 @@ export type OperationVariant = {
   unitPriceInCents: number;
   quantity: number | null;
   available: number | null;
+  needsReview: boolean;
 };
 export type ShipmentOrderOption = {
   id: string;

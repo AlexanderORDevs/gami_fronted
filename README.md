@@ -12,16 +12,35 @@ The roadmap remains authoritative for scope and permissions: customer storefront
 
 ## Public catalog
 
-- Anonymous browsing, text search, category/brand filters, price/newest sorting, and pagination (24 products per page).
+- Anonymous browsing, text search, category/brand filters, and pagination (24 products per page). Confirmed positive net stock always comes first, before global pagination; newest/price sorting applies within available and unavailable groups. Saved products follow the same stock-first priority while retaining save order inside each group.
 - Product detail at `/?producto=<uuid>`, with description, prices in PEN, variants and available stock. The dialog supports keyboard dismissal and direct links.
-- Saved product IDs are browser-local (`gami.catalog.saved`), capped at 100, with no customer account required. Unpublished/deleted saved products disappear from the saved view.
+- Visitors can browse without an account. Saving a favorite, keeping a cart and creating an order requires the customer account available from "Mi cuenta". Favorites (max 100) and variant quantities (max 50) are stored per Customer in PostgreSQL, not shared browser-local lists. Unpublished/deleted saved products disappear from the saved view. Old anonymous local favorites/cart data is not automatically assigned to any account.
 - Public API: `GET /api/catalog/products`, `GET /api/catalog/products/:id`, `GET /api/catalog/filters`. List query parameters: `search`, `category`, `storeId`, `sort` (`newest`, `price-asc`, `price-desc`), and `page`.
 - Only non-deleted `PUBLISHED` products belonging to non-deleted `ACTIVE` stores are exposed. Internal attributes, inventory rows, reservations, store contacts, and audit data are not returned.
 - Available stock subtracts firm and unexpired live holds from inventory, with zero as the minimum. Only active variants are exposed; the update date is shown in detail.
+- Available cards retain color photographs and a green stock label. Sold-out and unconfirmed-stock cards use grayscale photographs and distinct text badges (Agotado / Stock por confirmar); details and favorites remain usable. A mixed product with any unknown active-variant inventory remains unconfirmed, matching current cart eligibility. Unknown stock is never displayed as verified zero stock.
 - Brand directory eligibility uses RN-10: at least three published products. Products from smaller catalogs remain individually visible.
 - Photos use the first HTTPS `ProductAttribute` with code `image_url`, ordered by position. No image means an explicit missing-photo placeholder, not a fabricated product image. No database migration or seed data is included.
 
-This is a read-only catalog, not checkout. Full RN-08 operational eligibility (including settlement data), stale-stock policy, payments, orders, and delivery promises are not implemented by this slice. Do not treat a displayed stock count as a reservation or purchase guarantee.
+The storefront includes account-owned cart and authenticated checkout, creating PENDING_PAYMENT orders and temporary stock holds without charging a payment. Missing/ambiguous delivery tariffs and unknown stock block confirmation; no free shipping or fake variants are inferred. Full RN-08 operational eligibility, payment capture, email verification, stale-stock policy and delivery promises remain separate work. Merely adding to cart does not reserve stock.
+
+### Order Follow-Up
+
+Customer `Mis órdenes`, store `Atención y órdenes`, and admin `/portal#orders` open one responsive order detail and event timeline. Customers see their delivery information and financial snapshot read-only. Staff see only the assigned store portion, cannot see customer delivery data or sibling-store items, and can report incidents; only order-writable store roles can confirm quantities. A captured matching payment is required before confirmation, so a `PENDING_PAYMENT` order stays blocked. Partial/zero confirmations show accepted quantities and shortages; flagged stock is labeled `Requiere recuento` and remains unavailable until inventory is physically recounted. Admin can record an internal incident review note; review does not resolve the incident or imply a refund. Cancellation, payment verification/capture, refunds and courier/delivery changes are not part of this screen.
+
+The backend deploy applies additive migration `20261109220000_add_order_confirmation_details` through the existing `db:deploy` build. Deploy backend before frontend. Local migration, API and mocked UI flows were tested; no production writes were performed.
+
+### Customer Account
+
+Registration shows a fixed +51 prefix and accepts exactly nine mobile digits starting with 9; the prefix is not included in the submitted phone field. Its password suggestion reuses the portal's cryptographic 16-character generator (uppercase/lowercase/numbers/symbols), fills the password field and offers show/hide. Password confirmation is omitted only during registration; change/recovery retain confirmation. Passwords still require at least 12 characters. Existing profile phone formats are not rewritten.
+
+Registration only submits username/displayName/email/phone/password. There is no role/store selector: the server assigns CUSTOMER and rejects injected privileges. The catalog has one neutral "Acceder" action ("Mi espacio" after customer login), not separate customer/staff entry buttons. Its branded login dialog uses `/auth/login`: CUSTOMER-only accounts remain in the catalog; staff accounts are handed to `/portal` with their existing role-based session. Registration remains customer-only. Staff and customer tokens use different sessionStorage keys (`gami.auth.session` and `gami.customer.session`); signing in through the unified entry clears the other local namespace to avoid carrying another identity into the wrong surface. No new privileges are assigned by this navigation.
+
+Visitors do not see the Guardados navigation. Their product hearts remain clickable but open login without saving or calling a favorite mutation; the detail dialog closes first so only one modal remains open. Guardados appears only after a customer session is established and disappears on logout. The access dialog follows the catalog's wordmark, display font, paper header and action color. Closing a customer session clears in-memory personal state immediately; another account reloads only its own server data. Session restoration and on-demand refresh rotate existing refresh tokens.
+
+Profile updates affect name/phone only. Checkout preloads customer contact and submits JWT, while the backend derives ownership and verifies the persisted cart. Idempotent retries are scoped by customer and the UI clears the cart only after confirmation. The customer account persists across devices through PostgreSQL, but each browser/tab has its own authentication session. No guest-to-account transfer of old orders based on contact data is performed. Email recovery requires the backend SMTP configuration; no password or tokens should be pasted in chat or committed.
+
+Deploy backend migration `20261109183000_add_customer_accounts` with the existing Render `db:deploy` build step and deploy this frontend. No Shell, one-off job, restore or new seed is needed. The implementation and integrations were validated locally; production was not modified.
 
 Run the API first and configure `NEXT_PUBLIC_API_URL` (default `http://localhost:4000/api`). The API `FRONTEND_URL` must match the browser origin for CORS. The primary local frontend uses `http://localhost:3000`, with the API at `http://localhost:4000/api`. Restart existing servers after updating a production build; an already-running `next start` does not reliably pick up a replacement build.
 
@@ -68,7 +87,7 @@ Validation: 16 store tests plus 15 nearby catalog/information tests, frontend/ba
 
 ## Administrative information
 
-The general administration workspace includes these modules, available only to `SUPER_ADMIN` after mandatory password replacement. Except for store records and user management, these remain read-only:
+The general administration workspace includes these modules, available only to `SUPER_ADMIN` after mandatory password replacement. Payouts support creating audited drafts only; other information remains read-only:
 
 | Portal section   | Current information                                                                  | URL                     |
 | ---------------- | ------------------------------------------------------------------------------------ | ----------------------- |
@@ -76,16 +95,18 @@ The general administration workspace includes these modules, available only to `
 | Internal catalog | Registered products, publication status, prices, active variant counts, descriptions | `/portal#products`      |
 | Orders           | Order numbers, stored totals, statuses and promised delivery dates                   | `/portal#orders`        |
 | Warehouse        | Recorded shipments, scheduled pickup, tracking and dispatch/delivery dates           | `/portal#warehouse`     |
-| Finance          | Existing payouts and ledger entries, without calculated balances or money movements  | `/portal#finance`       |
-| Configuration    | Approved numeric parameters, logistics calendar and shipping rates                   | `/portal#configuration` |
+| Finance          | Payout list and ledger; manual PEN drafts, with a visibly marked DEMO example        | `/portal#finance`       |
+| Configuration    | Approved numeric parameters; editable logistics dates and shipping rates             | `/portal#configuration` |
 
 Users and access remain at `/portal#users`. These are internal modules, not a link to the public customer catalog. Logout still clears the local session and navigates to `/`.
 
 The information tables support server-side search, 20-row pagination, refresh, keyboard-accessible record detail dialogs, empty states and retry on failure. Mobile navigation and tables scroll within their own containers. Search fields are resource-specific: store name, product name, order number, setting key, calendar description or district.
 
-The protected read-only endpoints are `GET /api/admin/information/{stores,products,orders,shipments,payouts,ledger,settings,calendar,shipping-rates}`, with `page` and optional `search` query parameters. All use the existing JWT, password-change and role guards. The frontend does not cache these requests. Non-deleted stores/products are listed; historical orders, shipments and financial records remain visible. No schema migration, seed, business mutation or new authorization role is introduced.
+The information endpoints use the existing JWT, password-change and role guards. `GET /api/admin/information/{stores,products,orders,shipments,payouts,ledger,settings,calendar,shipping-rates}` supports `page` and optional `search`; `POST /api/admin/information/payouts` creates an audited `DRAFT`, while `POST /api/admin/information/shipping-rates` and `POST /api/admin/information/calendar` create/update logistics configuration with a required audit reason. Shipping-rate date/quantity overlaps for the same destination are rejected. Calendar rows record working/non-working dates; they do not yet calculate delivery promises. No public/admin rate or holiday values are invented. The UI does not cache list requests. Payout drafts do not transfer money or write the immutable ledger. The payout table labels demo rows as `DEMO`; the normal backend deployment applies the payout demo migration and inserts one idempotent DMarco `DRAFT` for S/ 1.00 through `db:seed`. Non-deleted stores/products are listed; historical orders, shipments and financial records remain visible. No new authorization role is introduced.
 
-Only the six existing approved numeric setting keys are exposed. Arbitrary settings, secrets, gateway payloads, integration metadata, financial receipts and customer contact details are not returned. No values are inferred or fabricated when records are absent. These screens are not implementations of product approval, complete store onboarding, order transitions, quality control, settlement processing or configuration editing. Store-specific intranet workflows and specialist-role access are outside this delivery; unresolved financial decisions remain unchanged.
+Store order creation uses the public server-side tariff quote. The form shows calculated shipping and total, and the API rechecks both the expected subtotal and shipping against current database values. Operators cannot type or override the shipping cost. Missing or ambiguous tariffs block order creation.
+
+Only the six existing approved numeric setting keys are exposed. Arbitrary settings, secrets, gateway payloads, integration metadata, financial receipts and customer contact details are not returned. No values are inferred or fabricated when records are absent. Shipping rates and logistics calendar dates are editable with audit reasons; arbitrary platform-setting editing, product approval, complete store onboarding, order transitions, quality control and settlement processing remain outside these screens. Calendar entries do not yet calculate delivery promises. Store-specific intranet workflows and specialist-role access are outside this delivery; unresolved financial decisions remain unchanged.
 
 ## Authentication boundary
 

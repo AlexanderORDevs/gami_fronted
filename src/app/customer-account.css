@@ -1,0 +1,240 @@
+.customer-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: 580px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: white;
+  color: var(--ink);
+}
+.customer-dialog::backdrop {
+  background: rgba(63, 31, 46, 0.4);
+  backdrop-filter: blur(2px);
+}
+.customer-dialog > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+.customer-dialog[data-view="login"] {
+  width: 480px;
+}
+.customer-wordmark {
+  margin: 0 0 12px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+.customer-wordmark span {
+  color: var(--coral);
+}
+.customer-dialog h2 {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 26px;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.customer-body {
+  padding: 24px;
+}
+.customer-body > nav {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+.customer-body button[aria-current="page"] {
+  font-weight: 700;
+}
+.customer-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+.customer-dialog .primary-button,
+.customer-dialog .secondary-button,
+.customer-dialog .text-button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  white-space: normal;
+}
+.customer-dialog .secondary-button {
+  background: #245847;
+  border-color: #245847;
+  color: #fff;
+}
+.customer-dialog .secondary-button:hover {
+  background: #194332;
+  border-color: #194332;
+}
+.customer-dialog .text-button {
+  padding: 8px 12px;
+  border: 1px solid #dcb4aa;
+  border-radius: 5px;
+  background: #f1d8d1;
+  color: var(--ink);
+}
+.customer-dialog .text-button:hover {
+  background: #e8beb3;
+}
+.customer-body button[aria-current="page"] {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+.customer-dialog .icon-button {
+  background: #f1d8d1;
+  color: var(--ink);
+}
+.customer-dialog .icon-button:hover {
+  background: #e8beb3;
+}
+.customer-dialog button:focus-visible,
+.catalog-header .catalog-account-button:focus-visible,
+.catalog-header .catalog-cart-button:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 3px;
+}
+.customer-dialog .field,
+.customer-dialog .input-shell {
+  min-width: 0;
+}
+.customer-dialog input {
+  min-width: 0;
+  width: 100%;
+}
+.customer-phone-prefix {
+  color: var(--muted);
+  font-weight: 600;
+  padding-right: 10px;
+  border-right: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.customer-password-guidance {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.customer-password-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.customer-dialog [role="alert"] {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+.customer-dialog .icon-button {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+.customer-orders article {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.customer-orders h3 {
+  font-size: 16px;
+  margin-top: 0;
+}
+.customer-orders h4 {
+  margin: 12px 0 4px;
+  font-size: 14px;
+}
+.customer-orders p,
+.customer-orders time {
+  font-size: 13px;
+}
+.customer-orders footer,
+.customer-orders footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  font-size: 12px;
+}
+.customer-recovery {
+  display: grid;
+  gap: 12px;
+}
+.customer-recovery code {
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.catalog-account-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  max-width: 200px;
+  min-width: 0;
+}
+.catalog-header .catalog-navigation {
+  margin-right: auto;
+}
+.catalog-header .catalog-cart-button {
+  margin-left: 0;
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+.catalog-header .catalog-cart-button:hover {
+  background: #5b3045;
+  border-color: #5b3045;
+}
+.catalog-account-button {
+  min-width: 116px;
+  justify-content: center;
+  background: var(--action);
+  border-color: var(--action);
+  color: #fff;
+}
+.catalog-account-button:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.catalog-account-button span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.catalog-account-status {
+  margin: 0 5%;
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .customer-dialog > header,
+  .customer-body {
+    padding: 16px;
+  }
+  .customer-dialog h2 {
+    font-size: 22px;
+  }
+  .catalog-account-button {
+    max-width: 150px;
+    font-size: 12px;
+  }
+}

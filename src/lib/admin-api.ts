@@ -72,6 +72,32 @@ export type CreateUserInput = {
   storeRole?: StoreRole;
 };
 
+export type RegisterPayoutInput = {
+  requestId: string;
+  storeId: string;
+  amountInCents: number;
+  scheduledAt?: string;
+  reason: string;
+};
+
+export type CreateShippingRateInput = {
+  zoneType: "LIMA" | "PROVINCE" | "AGENCY";
+  district?: string;
+  minItems: number;
+  maxItems?: number;
+  rateInCents: number;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  reason: string;
+};
+
+export type UpsertCalendarDayInput = {
+  date: string;
+  isWorkingDay: boolean;
+  description?: string;
+  reason: string;
+};
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
   "http://localhost:4000/api";
@@ -220,6 +246,43 @@ export function getAdminInformation(
     `/admin/information/${resource}?${parameters}`,
     { signal, cache: "no-store" },
   );
+}
+
+export function registerPayout(
+  accessToken: string,
+  input: RegisterPayoutInput,
+) {
+  return adminRequest<{
+    id: string;
+    status: "DRAFT";
+    store: string;
+    amountInCents: number;
+    currency: "PEN";
+    scheduledAt: string | null;
+  }>(accessToken, "/admin/information/payouts", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function createShippingRate(
+  accessToken: string,
+  input: CreateShippingRateInput,
+) {
+  return adminRequest(accessToken, "/admin/information/shipping-rates", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function upsertCalendarDay(
+  accessToken: string,
+  input: UpsertCalendarDayInput,
+) {
+  return adminRequest(accessToken, "/admin/information/calendar", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export function listUsers(

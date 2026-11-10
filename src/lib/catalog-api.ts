@@ -25,6 +25,26 @@ export type CatalogProduct = {
   variants: CatalogVariant[];
 };
 
+export type CatalogAvailability = "available" | "sold-out" | "unconfirmed";
+export function getCatalogAvailability(
+  product: CatalogProduct,
+): CatalogAvailability {
+  if (
+    !(product.stockKnown ?? product.variants.length > 0) ||
+    !product.variants.length
+  )
+    return "unconfirmed";
+  return product.variants.some((variant) => variant.availableStock > 0)
+    ? "available"
+    : "sold-out";
+}
+export function stockFirst(left: CatalogProduct, right: CatalogProduct) {
+  return (
+    Number(getCatalogAvailability(right) === "available") -
+    Number(getCatalogAvailability(left) === "available")
+  );
+}
+
 export type CatalogPage = {
   data: CatalogProduct[];
   total: number;

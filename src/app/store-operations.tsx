@@ -34,6 +34,11 @@ import {
   type StoreOperation,
   type WorkspaceStore,
 } from "@/lib/store-api";
+import {
+  checkoutRequest,
+  type CheckoutQuote,
+  type CheckoutQuoteInput,
+} from "@/lib/checkout-api";
 import "./store-operations.css";
 
 const TITLES: Record<StoreOperation, string> = {
@@ -125,10 +130,12 @@ export function OperationStoreSelect({
   token,
   value,
   onChange,
+  label = "Tienda",
 }: Readonly<{
   token: string;
   value: string;
   onChange: (store: WorkspaceStore | null) => void;
+  label?: string;
 }>) {
   const [stores, setStores] = useState<WorkspaceStore[]>([]);
   const [error, setError] = useState("");
@@ -150,7 +157,7 @@ export function OperationStoreSelect({
   return (
     <div className="operation-store-select">
       <label className="field">
-        <span>Tienda</span>
+        <span>{label}</span>
         <select
           value={value}
           onChange={(event) =>
@@ -758,8 +765,12 @@ function RecordPicker<T extends { id: string }>({
     </div>
   );
 }
-const variantDescription = (variant: OperationVariant) =>
-  `${variant.productName} · ${variant.sizeLabel} / ${label(variant.color)} · ${variant.available ?? "?"} disponibles`;
+const variantDescription = (variant: OperationVariant) => {
+  const availability = variant.needsReview
+    ? "Requiere recuento"
+    : `${variant.available ?? "?"} disponibles`;
+  return `${variant.productName} · ${variant.sizeLabel} / ${label(variant.color)} · ${availability}`;
+};
 
 function InventoryForm({ token, storeId, pending, save }: FormProps) {
   const [variant, setVariant] = useState<OperationVariant | null>(null);
@@ -799,6 +810,7 @@ function InventoryForm({ token, storeId, pending, save }: FormProps) {
             <output>
               Stock actual: {variant.quantity ?? "Sin registrar"} · Disponible:{" "}
               {variant.available ?? "Sin registrar"}
+              {variant.needsReview && " · Requiere recuento"}
             </output>
             <Field
               label="Nuevo stock total"
@@ -832,10 +844,77 @@ function OrderForm({ token, storeId, pending, save }: FormProps) {
     [],
   );
   const [sameRecipient, setSameRecipient] = useState(true);
-  const [zone, setZone] = useState("LIMA");
-  const [shipping, setShipping] = useState("0");
+  const [zone, setZone] = useState<CheckoutQuoteInput["zoneType"]>("LIMA");
+  const [district, setDistrict] = useState("");
+  const [quoteResult, setQuoteResult] = useState<{
+    key: string;
+    quote: CheckoutQuote;
+  } | null>(null);
+  const [quoteLoadingKey, setQuoteLoadingKey] = useState("");
+  const [quoteError, setQuoteError] = useState<{
+    key: string;
+    message: string;
+  } | null>(null);
+  const quoteInput: CheckoutQuoteInput | null =
+    items.length &&
+    items.every((item) => Number.isInteger(item.units) && item.units > 0) &&
+    (zone !== "LIMA" || district.trim())
+      ? {
+          items: items.map((item) => ({
+            variantId: item.id,
+            quantity: item.units,
+          })),
+          zoneType: zone,
+          ...(district.trim() ? { district: district.trim() } : {}),
+        }
+      : null;
+  const quoteKey = quoteInput ? JSON.stringify(quoteInput) : "";
+  const activeQuote = quoteResult?.key === quoteKey ? quoteResult.quote : null;
+  const activeQuoteError =
+    quoteError?.key === quoteKey ? quoteError.message : "";
+  const quoteLoading = quoteKey !== "" && quoteLoadingKey === quoteKey;
+
+  useEffect(() => {
+    if (!quoteKey) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setQuoteLoadingKey(quoteKey);
+      setQuoteError(null);
+      void checkoutRequest<CheckoutQuote>(
+        "quote",
+        JSON.parse(quoteKey) as CheckoutQuoteInput,
+        controller.signal,
+      )
+        .then((quote) => {
+          setQuoteResult({ key: quoteKey, quote });
+          setQuoteLoadingKey((current) =>
+            current === quoteKey ? "" : current,
+          );
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) {
+            setQuoteError({
+              key: quoteKey,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "No se pudo calcular el envío.",
+            });
+            setQuoteLoadingKey((current) =>
+              current === quoteKey ? "" : current,
+            );
+          }
+        });
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [quoteKey]);
+
   function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!activeQuote) return;
     const data = new FormData(event.currentTarget);
     void save({
       customerName: text(data, "customerName"),
@@ -859,7 +938,8 @@ function OrderForm({ token, storeId, pending, save }: FormProps) {
       ...(text(data, "reference")
         ? { reference: text(data, "reference") }
         : {}),
-      shippingInCents: cents(data, "shipping"),
+      expectedSubtotalInCents: activeQuote.subtotalInCents,
+      expectedShippingInCents: activeQuote.shippingInCents,
       items: items.map((item) => ({
         variantId: item.id,
         quantity: item.units,
@@ -929,7 +1009,9 @@ function OrderForm({ token, storeId, pending, save }: FormProps) {
               <span>Zona de entrega</span>
               <select
                 value={zone}
-                onChange={(event) => setZone(event.target.value)}
+                onChange={(event) =>
+                  setZone(event.target.value as CheckoutQuoteInput["zoneType"])
+                }
               >
                 <option value="LIMA">Lima</option>
                 <option value="PROVINCE">Provincia</option>
@@ -950,6 +1032,8 @@ function OrderForm({ token, storeId, pending, save }: FormProps) {
               required={zone === "LIMA"}
               minLength={2}
               maxLength={100}
+              value={district}
+              onChange={(event) => setDistrict(event.target.value)}
             />
             {zone === "AGENCY" && (
               <Field
@@ -1037,27 +1121,24 @@ function OrderForm({ token, storeId, pending, save }: FormProps) {
             </div>
           ))}
         </fieldset>
-        <Field
-          label="Costo de envío (S/)"
-          name="shipping"
-          type="number"
-          min={0}
-          max={1000000}
-          step="0.01"
-          required
-          value={shipping}
-          onChange={(event) => setShipping(event.target.value)}
-        />
-        <output className="operation-total">
-          Total:{" "}
-          {money(
-            items.reduce(
-              (total, item) => total + item.unitPriceInCents * item.units,
-              0,
-            ) + Math.round(Number(shipping || 0) * 100),
+        {items.length > 0 &&
+          !quoteKey &&
+          zone === "LIMA" &&
+          !district.trim() && (
+            <p>Indica el distrito para consultar la tarifa vigente.</p>
           )}
-        </output>
-        <Submit pending={pending} disabled={!items.length}>
+        {quoteLoading && <output>Calculando tarifa y total...</output>}
+        {activeQuoteError && <p role="alert">{activeQuoteError}</p>}
+        {activeQuote && (
+          <output className="operation-total">
+            Envío: {money(activeQuote.shippingInCents)} · Total:{" "}
+            {money(activeQuote.totalInCents)}
+          </output>
+        )}
+        <Submit
+          pending={pending}
+          disabled={!items.length || !activeQuote || quoteLoading}
+        >
           Crear orden
         </Submit>
       </fieldset>

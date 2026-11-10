@@ -32,6 +32,130 @@
   color: var(--muted);
   white-space: nowrap;
 }
+.payout-registration {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+.payout-registration > output {
+  color: #245847;
+  font-size: 13px;
+}
+.payout-dialog {
+  width: min(520px, calc(100% - 32px));
+}
+.payout-dialog::backdrop {
+  background: rgba(63, 31, 46, 0.45);
+}
+.payout-dialog > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+.payout-dialog > header h2 {
+  font:
+    400 26px/1.2 var(--font-display),
+    Georgia,
+    serif;
+  overflow-wrap: anywhere;
+}
+.payout-dialog .icon-button {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+.payout-fields {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.payout-fields input,
+.payout-fields textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: white;
+  color: var(--ink);
+  padding: 10px 12px;
+}
+.payout-scope-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.logistics-configuration {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+.logistics-configuration > output {
+  color: #245847;
+  font-size: 13px;
+}
+.logistics-dialog {
+  width: min(620px, calc(100% - 32px));
+}
+.logistics-dialog::backdrop {
+  background: rgba(63, 31, 46, 0.45);
+}
+.logistics-dialog > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+.logistics-dialog > header h2 {
+  font:
+    400 26px/1.2 var(--font-display),
+    Georgia,
+    serif;
+  overflow-wrap: anywhere;
+}
+.logistics-dialog .icon-button {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+.logistics-fields {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.logistics-fields input,
+.logistics-fields select,
+.logistics-fields textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: white;
+  color: var(--ink);
+  padding: 10px 12px;
+}
+.logistics-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
 .information-tabs {
   display: flex;
   gap: 24px;
@@ -103,6 +227,12 @@
   border-radius: 3px;
   font-size: 11px;
   line-height: 1.4;
+}
+.information-status.payout-demo-status {
+  background: #fff0d6;
+  color: #7a3d08;
+  border: 1px solid #e8c38b;
+  font-weight: 700;
 }
 .information-empty {
   min-height: 220px;
@@ -219,5 +349,8 @@
   .information-dialog dl > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 7px;
+  }
+  .logistics-range {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

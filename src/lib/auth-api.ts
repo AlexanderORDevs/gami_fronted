@@ -40,6 +40,16 @@ export function localizedApiError(
   status: number,
 ): string {
   const messages: Record<string, string> = {
+    "La orden cambió. Actualiza el detalle antes de continuar.":
+      "La orden cambió. Actualiza el detalle antes de continuar.",
+    "La suborden ya fue confirmada o rechazada.":
+      "La suborden ya fue confirmada o rechazada.",
+    "Se requiere pago verificado antes de confirmar prendas.":
+      "Se requiere pago verificado antes de confirmar prendas.",
+    "Las reservas firmes no coinciden con la suborden.":
+      "Las reservas firmes no coinciden con la suborden. Solicita revisión a administración.",
+    "El inventario actual no permite confirmar esta cantidad. Revisa el recuento o reporta el faltante.":
+      "El inventario actual no permite confirmar esta cantidad. Revisa el recuento o reporta el faltante.",
     "El stock cambio. Actualiza el inventario y vuelve a intentarlo.":
       "El stock cambió. Actualiza el inventario y vuelve a intentarlo.",
     "El stock no puede ser menor que las unidades reservadas.":

@@ -220,6 +220,43 @@
 .product-card {
   min-width: 0;
 }
+.product-card[data-availability="sold-out"] .product-photo img,
+.product-card[data-availability="unconfirmed"] .product-photo img {
+  filter: grayscale(1);
+}
+.product-card[data-availability="sold-out"] .product-photo,
+.product-card[data-availability="unconfirmed"] .product-photo {
+  background: #e8e8e8;
+}
+.product-card[data-availability="sold-out"] .product-reference,
+.product-card[data-availability="unconfirmed"] .product-reference {
+  bottom: 46px;
+}
+.product-stock-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  padding: 6px 8px;
+  border: 1px solid #242424;
+  border-radius: 3px;
+  background: #242424;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 600;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+.product-card[data-availability="unconfirmed"] .product-stock-badge {
+  background: #efefef;
+  color: #303030;
+  border-style: dashed;
+}
+.product-card[data-availability="available"] .product-meta > span {
+  color: #245847;
+  font-weight: 600;
+}
 .product-photo {
   position: relative;
   aspect-ratio: 4 / 5;
